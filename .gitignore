@@ -1,0 +1,98 @@
+# ── Dependencies ──────────────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+
+# ── Build output ───────────────────────────────────────────────────────────────
+dist/
+dist-electron/
+out/
+release/
+build/
+
+# ── Vite ───────────────────────────────────────────────────────────────────────
+.vite/
+vite.config.*.timestamp-*
+
+# ── Electron-builder artifacts ─────────────────────────────────────────────────
+# Installer, portable, unpacked app
+*.exe
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.snap
+*.nsis
+*.msi
+release-builds/
+
+# ── SQLite database (data user, tidak masuk repo) ─────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+
+# ── Environment & secrets ──────────────────────────────────────────────────────
+.env
+.env.local
+.env.development
+.env.production
+.env.*.local
+
+# ── OS generated ───────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# ── Editor & IDE ───────────────────────────────────────────────────────────────
+.vscode/
+!.vscode/extensions.json
+!.vscode/launch.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ── TypeScript ─────────────────────────────────────────────────────────────────
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# ── Logs ───────────────────────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ── Lock files (pilih salah satu, commit yang sesuai package manager kamu) ─────
+# Uncomment baris yang TIDAK kamu pakai:
+# package-lock.json   ← uncomment ini kalau kamu pakai yarn/pnpm
+# yarn.lock           ← uncomment ini kalau kamu pakai npm/pnpm
+# pnpm-lock.yaml      ← uncomment ini kalau kamu pakai npm/yarn
+
+# ── Coverage & test ────────────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ── Temp & cache ───────────────────────────────────────────────────────────────
+.cache/
+.temp/
+.tmp/
+*.tmp
+
+# ── Electron-specific ──────────────────────────────────────────────────────────
+# Native module rebuild artifacts (better-sqlite3 dikompilasi ulang untuk Electron)
+electron/dist/
+resources/
+app.asar
+app.asar.unpacked/

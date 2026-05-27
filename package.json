@@ -1,0 +1,44 @@
+{
+  "name": "studyai",
+  "version": "2.0.0",
+  "description": "StudyAI — Desktop Study Assistant with AI",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "package": "npm run build && electron-builder",
+    "package:win": "npm run build && electron-builder --win",
+    "package:linux": "npm run build && electron-builder --linux"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "mammoth": "^1.7.2",
+    "marked": "^12.0.0",
+    "pdf-parse": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^20.12.7",
+    "@types/pdf-parse": "^1.1.5",
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "electron": "^30.5.1",
+    "electron-builder": "^24.13.3",
+    "electron-vite": "^2.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.11",
+    "zustand": "^4.5.2"
+  },
+  "build": {
+    "appId": "com.sndiy.studyai",
+    "productName": "StudyAI",
+    "directories": { "output": "release" },
+    "files": ["out/**/*"],
+    "win": { "target": "nsis" },
+    "linux": { "target": "AppImage" }
+  }
+}

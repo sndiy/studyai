@@ -1,0 +1,200 @@
+/* ── Editor.css ───────────────────────────────────────────────────────────── */
+
+.editor-area {
+  flex: 1; display: flex; flex-direction: column;
+  padding: 18px 22px; overflow: hidden;
+}
+.editor-empty {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  color: var(--text-dim); gap: 8px;
+}
+.empty-icon  { font-size: 40px; margin-bottom: 8px; }
+.empty-title { font-size: 16px; color: var(--text-muted); font-weight: 500; }
+.empty-sub   { font-size: 12.5px; }
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.editor-header { margin-bottom: 14px; flex-shrink: 0; }
+.cat-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 10px; position: relative;
+}
+.cat-pill {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 10px; background: var(--accent-bg);
+  border: 0.5px solid #3a3060; border-radius: 20px;
+  font-size: 11px; color: var(--accent-soft); cursor: pointer;
+  transition: all 0.15s;
+}
+.cat-pill:hover { background: #2a2050; }
+.cat-pill.green { background: rgba(72,200,150,0.08); border-color: #1e3018; color: var(--green); }
+.cat-dropdown {
+  position: absolute; top: 30px; left: 0; z-index: 50;
+  background: var(--bg-elevated); border: 0.5px solid var(--border-sub);
+  border-radius: var(--radius-md); overflow: hidden; min-width: 130px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.cat-option { padding: 8px 12px; font-size: 12px; color: var(--text-muted); cursor: pointer; }
+.cat-option:hover { background: var(--bg-overlay); color: var(--text-secondary); }
+.cat-option.sel   { background: var(--accent-bg); color: var(--accent-soft); }
+
+.save-indicator {
+  display: flex; align-items: center; gap: 4px; font-size: 11px;
+}
+.save-indicator.saved   { color: var(--green); }
+.save-indicator.unsaved { color: var(--yellow); }
+
+/* ── View toggle (Edit / Split / Preview) ────────────────────────────────── */
+.view-toggle {
+  margin-left: auto; display: flex; align-items: center;
+  background: var(--bg-base); border: 0.5px solid var(--border-sub);
+  border-radius: 8px; padding: 2px; gap: 1px;
+}
+
+/* Setiap tombol toggle punya label teks + icon */
+.vt-btn {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border-radius: 6px;
+  font-size: 11.5px; font-weight: 500;
+  color: var(--text-muted); background: none;
+  cursor: pointer; transition: all 0.15s;
+  white-space: nowrap;
+  /* CRITICAL: pastikan bisa diklik */
+  position: relative; z-index: 1;
+  -webkit-app-region: no-drag;
+  pointer-events: all;
+}
+.vt-btn .ti { font-size: 13px; }
+.vt-btn:hover  { color: var(--text-secondary); background: var(--bg-overlay); }
+.vt-btn.active {
+  background: var(--accent-bg); color: var(--accent-soft);
+  border: 0.5px solid #3a3060;
+}
+.vt-btn-label { font-size: 11px; }
+
+/* ── Title input ─────────────────────────────────────────────────────────── */
+.title-input {
+  width: 100%; background: none; border: none; outline: none;
+  font-size: 22px; font-weight: 500; color: var(--text-primary);
+  font-family: var(--font); padding: 0; line-height: 1.3;
+}
+.title-input::placeholder { color: #2e2e46; }
+
+.meta-row { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+.meta-item {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 11px; color: var(--text-dim);
+}
+.meta-item .ti { font-size: 12px; }
+
+.divider { width: 100%; height: 0.5px; background: var(--border); margin-bottom: 12px; flex-shrink: 0; }
+
+/* ── Toolbar markdown ─────────────────────────────────────────────────────── */
+.toolbar {
+  display: flex; align-items: center; gap: 1px;
+  margin-bottom: 10px; flex-wrap: wrap; flex-shrink: 0;
+  background: var(--bg-base); border: 0.5px solid var(--border);
+  border-radius: 8px; padding: 3px 5px;
+}
+
+/* Toolbar button — icon + label teks */
+.tb-btn {
+  display: flex; align-items: center; gap: 4px;
+  padding: 5px 8px; border-radius: 5px; font-size: 11px;
+  color: var(--text-muted); background: none; cursor: pointer;
+  transition: all 0.15s; white-space: nowrap;
+  -webkit-app-region: no-drag;
+  pointer-events: all;
+}
+.tb-btn:hover { background: var(--bg-overlay); color: var(--text-secondary); }
+.tb-btn .ti  { font-size: 13px; flex-shrink: 0; }
+.tb-btn-label { font-size: 10.5px; font-weight: 500; }
+.tb-sep { width: 0.5px; height: 16px; background: var(--border-sub); margin: 0 3px; flex-shrink: 0; }
+
+/* ── Editor body ─────────────────────────────────────────────────────────── */
+.editor-body {
+  flex: 1; overflow: hidden; display: flex; gap: 12px; min-height: 0;
+}
+.editor-body.mode-edit    .edit-pane    { flex: 1; }
+.editor-body.mode-preview .preview-pane { flex: 1; }
+.editor-body.mode-split   .edit-pane,
+.editor-body.mode-split   .preview-pane { flex: 1; }
+
+.editor-pane { display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+.edit-pane textarea {
+  flex: 1; width: 100%; height: 100%; background: none; border: none; outline: none;
+  resize: none; font-size: 13px; color: var(--text-secondary);
+  font-family: var(--font-mono); line-height: 1.9; padding: 0;
+}
+.edit-pane textarea::placeholder { color: #2e2e46; }
+
+/* Split divider */
+.editor-body.mode-split .edit-pane {
+  border-right: 0.5px solid var(--border);
+  padding-right: 12px;
+}
+
+.pane-label {
+  font-size: 10px; color: var(--text-dim); text-transform: uppercase;
+  letter-spacing: 0.5px; margin-bottom: 8px; flex-shrink: 0;
+}
+
+/* ── Preview / markdown ──────────────────────────────────────────────────── */
+.preview-pane { overflow-y: auto; }
+.md-preview {
+  font-size: 13.5px; color: var(--text-secondary);
+  line-height: 1.8; font-family: var(--font);
+}
+.md-preview h1, .md-preview h2, .md-preview h3,
+.md-preview h4, .md-preview h5, .md-preview h6 {
+  color: var(--text-primary); font-weight: 600;
+  margin: 1.2em 0 0.4em; line-height: 1.3;
+}
+.md-preview h1 { font-size: 20px; border-bottom: 0.5px solid var(--border); padding-bottom: 6px; }
+.md-preview h2 { font-size: 17px; }
+.md-preview h3 { font-size: 15px; }
+.md-preview p  { margin: 0.5em 0; }
+.md-preview strong { color: var(--text-primary); font-weight: 600; }
+.md-preview em     { color: var(--accent-soft); font-style: italic; }
+.md-preview ul, .md-preview ol { padding-left: 20px; margin: 0.4em 0; }
+.md-preview li { margin: 0.2em 0; }
+.md-preview blockquote {
+  border-left: 3px solid var(--accent); margin: 0.8em 0;
+  padding: 4px 12px; background: var(--accent-bg);
+  color: var(--text-muted); border-radius: 0 6px 6px 0;
+}
+.md-preview code {
+  background: var(--bg-elevated); border: 0.5px solid var(--border-sub);
+  border-radius: 4px; padding: 1px 5px;
+  font-family: var(--font-mono); font-size: 12.5px; color: #e0956a;
+}
+.md-preview pre {
+  background: var(--bg-elevated); border: 0.5px solid var(--border-sub);
+  border-radius: 8px; padding: 12px 14px; overflow-x: auto; margin: 0.8em 0;
+}
+.md-preview pre code {
+  background: none; border: none; padding: 0;
+  font-size: 12.5px; color: var(--text-secondary);
+}
+.md-preview hr { border: none; border-top: 0.5px solid var(--border); margin: 1em 0; }
+.md-preview a { color: var(--accent-soft); text-decoration: none; }
+.md-preview a:hover { text-decoration: underline; }
+.md-preview table {
+  border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 12.5px;
+}
+.md-preview th, .md-preview td {
+  border: 0.5px solid var(--border-sub); padding: 6px 10px; text-align: left;
+}
+.md-preview th { background: var(--bg-elevated); color: var(--text-primary); }
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+.editor-footer {
+  display: flex; align-items: center; gap: 8px;
+  padding-top: 12px; border-top: 0.5px solid var(--border);
+  margin-top: 10px; flex-shrink: 0;
+}
+.word-count { margin-left: auto; font-size: 11px; color: var(--text-dim); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { display: inline-block; animation: spin 1s linear infinite; }

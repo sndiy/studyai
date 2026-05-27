@@ -1,0 +1,66 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+:root {
+  --bg-base:    #0b0b0f;
+  --bg-surface: #10101a;
+  --bg-elevated:#161622;
+  --bg-overlay: #1a1a28;
+  --border:     #1e1e2e;
+  --border-sub: #2a2a3a;
+  --text-primary:   #e8e8f0;
+  --text-secondary: #c0c0d0;
+  --text-muted:     #6a6a8a;
+  --text-dim:       #44445a;
+  --accent:    #7c6af7;
+  --accent-soft:#a89cf7;
+  --accent-bg: #1e1a3a;
+  --green:     #48c896;
+  --green-bg:  #141a14;
+  --yellow:    #f0be3c;
+  --red:       #e05555;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --font: 'Inter', system-ui, sans-serif;
+  --font-mono: 'Consolas', 'JetBrains Mono', monospace;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-sub); border-radius: 3px; }
+
+button { font-family: var(--font); cursor: pointer; border: none; outline: none; }
+input, textarea { font-family: var(--font); outline: none; border: none; }
+
+.btn-primary {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 16px;
+  background: var(--accent); border-radius: var(--radius-md);
+  font-size: 12.5px; font-weight: 500; color: #fff;
+}
+.btn-secondary {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 12px;
+  background: var(--bg-elevated); border: 0.5px solid var(--border-sub);
+  border-radius: var(--radius-md); font-size: 12px; color: var(--text-muted);
+}
+.btn-danger {
+  display: flex; align-items: center; gap: 5px;
+  padding: 7px 12px;
+  background: #1e1218; border: 0.5px solid #3a1e22;
+  border-radius: var(--radius-md); font-size: 12px; color: var(--red);
+}
+.btn-primary:hover  { background: #6a58e8; }
+.btn-secondary:hover { background: var(--bg-overlay); color: var(--text-secondary); }
