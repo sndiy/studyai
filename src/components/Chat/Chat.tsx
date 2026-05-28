@@ -41,10 +41,21 @@ export default function Chat({ noteId }: { noteId?: number | null }) {
   }, [noteId])
 
   useEffect(() => {
-    if (!isFreeChat && selectedNote) {
-      setManualContextId(null)
-    }
-  }, [selectedNote?.id])
+  if (!isFreeChat && selectedNote) {
+    setManualContextId(null)
+  }
+}, [selectedNote?.id])
+
+// [Bug #6] Jika note yang dijadikan manualContextId dihapus dari store,
+// paksa reset ke null. Tanpa ini, contextNote tetap undefined tapi
+// manualContextId masih terisi → UI menampilkan konteks "hantu".
+useEffect(() => {
+  if (manualContextId === null) return
+  const stillExists = notes.some(n => Number(n.id) === manualContextId)
+  if (!stillExists) {
+    setManualContextId(null)
+  }
+}, [notes]) // re-run setiap kali list notes berubah (delete, reload)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })

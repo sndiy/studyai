@@ -1,8 +1,6 @@
-/**
- * aiStream.ts — Streaming layer untuk Gemini & OpenAI
- * FIXED: buildSafeMessages hanya di router, tidak di streamGemini/streamOpenAI
- * FIXED: Gemini alternating role enforcement lebih robust
- */
+// src/lib/aiStream.ts — FASE 4 PATCH
+// [Bug #8]  buildSafeMessages: tambah post-trim cleanup agar hasil selalu dimulai 'user'
+// [Bug #12] streamAI router: deteksi claude-* secara eksplisit, error terbaca langsung
 
 export type StreamChunk = { text: string; done: boolean; error?: string }
 export type ProgressStatus =
@@ -58,18 +56,21 @@ export function buildSafeMessages(
   const hardBudget = Math.floor(inputLimit * 0.9) - maxOutputTokens
   const systemTokens = estimateTokens(systemPrompt)
 
-  let budget = hardBudget - systemTokens
-  if (budget <= 0) {
+  // Budget terlalu kecil — kembalikan minimal 1 pesan user terakhir
+  if (hardBudget - systemTokens <= 0) {
+    const last = history.findLast(m => m.role === 'user') ?? history[history.length - 1]
     return {
-      safeMessages: history.slice(-1),
-      trimmedCount: history.length - 1,
-      estimatedInputTokens: systemTokens + estimateTokens(history[history.length - 1]?.content ?? '')
+      safeMessages: last ? [last] : [],
+      trimmedCount: history.length - (last ? 1 : 0),
+      estimatedInputTokens: systemTokens + estimateTokens(last?.content ?? '')
     }
   }
 
+  let budget = hardBudget - systemTokens
   const safeMessages: { role: string; content: string }[] = []
   let trimmedCount = 0
 
+  // Iterasi dari belakang — pesan terbaru diprioritaskan
   for (let i = history.length - 1; i >= 0; i--) {
     const tokens = estimateTokens(history[i].content)
     if (budget - tokens < 0) { trimmedCount++; continue }
@@ -78,48 +79,68 @@ export function buildSafeMessages(
   }
 
   if (safeMessages.length === 0 && history.length > 0) {
+    // Fallback: masukkan pesan terakhir apapun role-nya
     safeMessages.push(history[history.length - 1])
     trimmedCount = history.length - 1
   }
 
-  const estimatedInputTokens = systemTokens + safeMessages.reduce(
+  // [Bug #8] Post-trim cleanup:
+  // Setelah pemotongan dari depan, array bisa dimulai dengan 'assistant'.
+  // Gemini WAJIB dimulai dengan 'user' — drop dari depan sampai ketemu 'user'.
+  // Gunakan findIndex, bukan loop destruktif, agar tidak mutasi array asli.
+  const firstUserIdx = safeMessages.findIndex(m => m.role === 'user')
+  const cleanMessages = firstUserIdx > 0
+    ? safeMessages.slice(firstUserIdx)     // drop semua sebelum 'user' pertama
+    : safeMessages
+
+  // Hitung ulang trimmedCount berdasarkan berapa yang benar-benar dibuang
+  const totalDropped = history.length - cleanMessages.length
+  const finalTrimmedCount = Math.max(trimmedCount, totalDropped)
+
+  const estimatedInputTokens = systemTokens + cleanMessages.reduce(
     (sum, m) => sum + estimateTokens(m.content), 0
   )
 
-  return { safeMessages, trimmedCount, estimatedInputTokens }
+  return {
+    safeMessages: cleanMessages,
+    trimmedCount: finalTrimmedCount,
+    estimatedInputTokens
+  }
 }
 
-// ─── Fix alternating roles for Gemini ────────────────────────────────────────
-// Gemini API hanya menerima pesan dengan role bergantian user/model.
-// Kalau ada 2 pesan user berturut-turut → merge jadi satu.
+// ─── Fix alternating roles untuk Gemini ───────────────────────────────────────
+// CATATAN: fungsi ini tetap ada sebagai defense-in-depth di streamGemini,
+// tapi Bug #4 (Fase 3) sudah memastikan input sudah bersih sebelum sampai sini.
+// Tidak ada .pop() di sini — gunakan slice agar tidak destruktif.
 function enforceAlternatingRoles(
   contents: { role: string; parts: { text: string }[] }[]
 ): { role: string; parts: { text: string }[] }[] {
-  if (contents.length === 0) return contents
+  if (contents.length === 0) return []
 
   const result: { role: string; parts: { text: string }[] }[] = []
 
   for (const msg of contents) {
     const last = result[result.length - 1]
     if (last && last.role === msg.role) {
-      // Merge dengan pesan sebelumnya yang sama role-nya
+      // Merge: consecutive role sama → gabung parts
       last.parts.push({ text: '\n\n' + msg.parts[0].text })
     } else {
       result.push({ role: msg.role, parts: [...msg.parts] })
     }
   }
 
-  // Pastikan dimulai dengan 'user'
-  if (result[0]?.role !== 'user') {
-    result.shift()
-  }
+  // Pastikan dimulai dengan 'user' — drop dari depan, jangan shift() destruktif
+  const firstUser = result.findIndex(m => m.role === 'user')
+  if (firstUser < 0) return [] // tidak ada pesan user sama sekali → abort
+  const trimmed = result.slice(firstUser)
 
-  // Pastikan diakhiri dengan 'user'
-  if (result[result.length - 1]?.role !== 'user') {
-    result.pop()
-  }
+  // Pastikan diakhiri dengan 'user' — [Bug #8 defense] jangan .pop()
+  // Cari index 'user' terakhir
+  let lastUserIdx = trimmed.length - 1
+  while (lastUserIdx >= 0 && trimmed[lastUserIdx].role !== 'user') lastUserIdx--
+  if (lastUserIdx < 0) return []
 
-  return result
+  return trimmed.slice(0, lastUserIdx + 1)
 }
 
 // ─── SSE Stream Reader ────────────────────────────────────────────────────────
@@ -172,13 +193,11 @@ export async function streamGemini(opts: StreamOptions): Promise<void> {
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${apiKey}&alt=sse`
 
-  // Convert ke Gemini format
   const rawContents = messages.map(m => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }]
   }))
 
-  // Enforce alternating roles — CRITICAL untuk Gemini API
   const contents = enforceAlternatingRoles(rawContents)
 
   if (contents.length === 0) {
@@ -324,7 +343,25 @@ export async function streamOpenAI(opts: StreamOptions): Promise<void> {
 
 export async function streamAI(opts: StreamOptions): Promise<void> {
   const { model } = opts
+
   if (model.startsWith('gemini')) return streamGemini(opts)
   if (model.startsWith('gpt'))    return streamOpenAI(opts)
-  opts.onChunk({ text: '', done: true, error: `Model tidak dikenali: ${model}. Cek pengaturan provider.` })
+
+  // [Bug #12] Claude terdeteksi secara eksplisit — error terbaca, bukan silent fail
+  // Store (Fase 3) sudah guard sebelum sampai sini, tapi defense-in-depth wajib ada di sini
+  if (model.startsWith('claude')) {
+    opts.onChunk({
+      text: '',
+      done: true,
+      error: `Claude streaming belum diimplementasikan. Ganti model ke Gemini atau GPT di Pengaturan → Providers.`
+    })
+    return
+  }
+
+  // Model benar-benar tidak dikenali
+  opts.onChunk({
+    text: '',
+    done: true,
+    error: `Model tidak dikenali: "${model}". Periksa pengaturan provider.`
+  })
 }

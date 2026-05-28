@@ -42,7 +42,7 @@ export default function Sidebar() {
         <div className="logo-row">
           <div className="logo-icon">📚</div>
           <span className="logo-text">StudyAI</span>
-          <span className="logo-ver">v2.0</span>
+          <span className="logo-ver">v0.5</span>
         </div>
         <div className="search-box">
           <i className="ti ti-search" />

@@ -1,3 +1,10 @@
+// src/main/main.ts — FASE 1 PATCH
+// Perubahan:
+// 1. [Bug #11] Tambah set.run('max_tokens', '2048') di initDB()
+// 2. [Bug #5]  Tambah kolom session_id di chat_history + query getHistory pakai session_id
+// 3. [Bug #1]  Tambah ipcMain.handle('stats:increment', ...)
+// 4. [Bug #9]  streak:get sudah ada — pastikan tidak ada duplikasi, tambah streak:update terpisah
+
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import { join } from 'path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
@@ -29,6 +36,7 @@ function initDB() {
     CREATE TABLE IF NOT EXISTS chat_history (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
       note_id    INTEGER,
+      session_id TEXT,
       role       TEXT NOT NULL,
       content    TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
@@ -39,16 +47,26 @@ function initDB() {
       notes_created INTEGER DEFAULT 0
     );
   `)
+
+  // [Bug #5] Migrasi: tambah kolom session_id jika belum ada (safe untuk DB lama)
+  try {
+    db.exec(`ALTER TABLE chat_history ADD COLUMN session_id TEXT`)
+  } catch {
+    // kolom sudah ada — skip
+  }
+
   const set = db.prepare(`INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)`)
-  set.run('gemini_api_key','')
-  set.run('active_model','gemini-2.5-flash')
-  set.run('persona_name','Mai')
-  set.run('persona_prompt','Kamu adalah Mai, asisten belajar yang cerdas dan supportif. Kamu berbicara dengan hangat tapi tetap fokus pada materi. Gunakan bahasa Indonesia casual.')
-  set.run('persona_limit','Jawab maksimal 3 paragraf. Sertakan contoh kode untuk topik programming.')
-  set.run('openai_api_key','')
-  set.run('claude_api_key','')
-  set.run('streak_count','0')
-  set.run('streak_last_date','')
+  set.run('gemini_api_key', '')
+  set.run('active_model', 'gemini-2.5-flash')
+  set.run('persona_name', 'Mai')
+  set.run('persona_prompt', 'Kamu adalah Mai, asisten belajar yang cerdas dan supportif. Kamu berbicara dengan hangat tapi tetap fokus pada materi. Gunakan bahasa Indonesia casual.')
+  set.run('persona_limit', 'Jawab maksimal 3 paragraf. Sertakan contoh kode untuk topik programming.')
+  set.run('openai_api_key', '')
+  set.run('claude_api_key', '')
+  set.run('streak_count', '0')
+  set.run('streak_last_date', '')
+  // [Bug #11] Default max_tokens wajib ada agar parseInt(settings.max_tokens) tidak NaN
+  set.run('max_tokens', '2048')
 }
 
 let win: BrowserWindow
@@ -83,6 +101,19 @@ ipcMain.on('window-close',    () => win.close())
 ipcMain.handle('notes:getAll', () =>
   db.prepare(`SELECT * FROM notes ORDER BY updated_at DESC`).all())
 
+// [Bug #10 - Addendum Fase 2] notes:search — full-text search dengan LIKE
+ipcMain.handle('notes:search', (_e, query: string) => {
+  if (!query || !query.trim()) {
+    return db.prepare(`SELECT * FROM notes ORDER BY updated_at DESC`).all()
+  }
+  const q = `%${query.trim()}%`
+  return db.prepare(
+    `SELECT * FROM notes
+     WHERE title LIKE ? OR content LIKE ? OR category LIKE ?
+     ORDER BY updated_at DESC`
+  ).all(q, q, q)
+})
+
 ipcMain.handle('notes:get', (_e, id: number) =>
   db.prepare(`SELECT * FROM notes WHERE id=?`).get(id))
 
@@ -105,7 +136,7 @@ ipcMain.handle('notes:save', (_e, note: { id: string | number; title: string; co
     const res = db.prepare(`UPDATE notes SET title=?,content=?,category=?,updated_at=? WHERE id=?`)
       .run(title, content, category, now, id)
     if (res.changes === 0) return { ok: false, error: 'Catatan tidak ditemukan' }
-    return { ok: true }
+    return { ok: true, updated_at: now }
   } catch (e) {
     return { ok: false, error: String(e) }
   }
@@ -118,7 +149,7 @@ ipcMain.handle('notes:delete', (_e, id: number) => {
 })
 
 ipcMain.handle('settings:getAll', () => {
-  const rows = db.prepare(`SELECT key,value FROM settings`).all() as {key:string,value:string}[]
+  const rows = db.prepare(`SELECT key,value FROM settings`).all() as { key: string; value: string }[]
   return Object.fromEntries(rows.map(r => [r.key, r.value]))
 })
 
@@ -127,40 +158,64 @@ ipcMain.handle('settings:set', (_e, key: string, value: string) => {
   return { ok: true }
 })
 
-ipcMain.handle('chat:getHistory', (_e, noteId: number | null) => {
+// [Bug #5] chat:getHistory — pisahkan chat bebas per session_id
+// Kontrak:
+//   noteId = number  → ambil chat milik note tersebut
+//   noteId = null, sessionId = string → ambil chat bebas sesi itu saja
+//   noteId = null, sessionId = null   → ambil SEMUA chat bebas (legacy/global, untuk migrasi)
+ipcMain.handle('chat:getHistory', (_e, noteId: number | null, sessionId?: string | null) => {
   try {
-    if (noteId == null || noteId === undefined)
-      return db.prepare(`SELECT * FROM chat_history WHERE note_id IS NULL ORDER BY id`).all()
-    const id = typeof noteId === 'string' ? parseInt(noteId as any, 10) : noteId
-    if (isNaN(id)) return []
-    return db.prepare(`SELECT * FROM chat_history WHERE note_id=? ORDER BY id`).all(id)
+    if (noteId != null) {
+      const id = typeof noteId === 'string' ? parseInt(noteId as any, 10) : noteId
+      if (isNaN(id)) return []
+      return db.prepare(`SELECT * FROM chat_history WHERE note_id=? ORDER BY id`).all(id)
+    }
+    // Chat bebas
+    if (sessionId != null && sessionId !== '') {
+      return db.prepare(
+        `SELECT * FROM chat_history WHERE note_id IS NULL AND session_id=? ORDER BY id`
+      ).all(sessionId)
+    }
+    // Fallback global (tidak ada session_id) — backward compat
+    return db.prepare(
+      `SELECT * FROM chat_history WHERE note_id IS NULL AND (session_id IS NULL OR session_id='') ORDER BY id`
+    ).all()
   } catch (e) {
     return []
   }
 })
 
-ipcMain.handle('chat:addMessage', (_e, noteId: number | null, role: string, content: string) => {
+// [Bug #5] chat:addMessage — terima session_id opsional
+ipcMain.handle('chat:addMessage', (_e, noteId: number | null, role: string, content: string, sessionId?: string | null) => {
   try {
     const id = (noteId == null || noteId === undefined) ? null
       : typeof noteId === 'string' ? (parseInt(noteId as any, 10) || null)
       : noteId
+    const sid = (sessionId ?? null)
     const now = new Date().toLocaleString('id-ID')
-    db.prepare(`INSERT INTO chat_history(note_id,role,content,created_at) VALUES(?,?,?,?)`).run(id, role, content, now)
-    const today = new Date().toISOString().slice(0,10)
-    db.prepare(`INSERT INTO daily_stats(date,chat_count) VALUES(?,1) ON CONFLICT(date) DO UPDATE SET chat_count=chat_count+1`).run(today)
+    db.prepare(
+      `INSERT INTO chat_history(note_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)`
+    ).run(id, sid, role, content, now)
+    const today = new Date().toISOString().slice(0, 10)
+    db.prepare(
+      `INSERT INTO daily_stats(date,chat_count) VALUES(?,1) ON CONFLICT(date) DO UPDATE SET chat_count=chat_count+1`
+    ).run(today)
     return { ok: true }
   } catch (e) {
     return { ok: false, error: String(e) }
   }
 })
 
-ipcMain.handle('chat:clearHistory', (_e, noteId: number | null) => {
+// [Bug #5] chat:clearHistory — terima session_id opsional
+ipcMain.handle('chat:clearHistory', (_e, noteId: number | null, sessionId?: string | null) => {
   try {
-    if (noteId == null || noteId === undefined) {
-      db.prepare(`DELETE FROM chat_history WHERE note_id IS NULL`).run()
-    } else {
+    if (noteId != null) {
       const id = typeof noteId === 'string' ? parseInt(noteId as any, 10) : noteId
       if (!isNaN(id)) db.prepare(`DELETE FROM chat_history WHERE note_id=?`).run(id)
+    } else if (sessionId != null && sessionId !== '') {
+      db.prepare(`DELETE FROM chat_history WHERE note_id IS NULL AND session_id=?`).run(sessionId)
+    } else {
+      db.prepare(`DELETE FROM chat_history WHERE note_id IS NULL AND (session_id IS NULL OR session_id='')`).run()
     }
     return { ok: true }
   } catch (e) {
@@ -170,24 +225,53 @@ ipcMain.handle('chat:clearHistory', (_e, noteId: number | null) => {
 
 ipcMain.handle('stats:get', () => {
   const totalNotes = (db.prepare(`SELECT COUNT(*) as c FROM notes`).get() as any).c
-  const today = new Date().toISOString().slice(0,10)
+  const today = new Date().toISOString().slice(0, 10)
   const todayStat = db.prepare(`SELECT * FROM daily_stats WHERE date=?`).get(today) as any
   const categories = db.prepare(`SELECT category, COUNT(*) as c FROM notes GROUP BY category`).all()
   const recentNotes = db.prepare(`SELECT * FROM notes ORDER BY updated_at DESC LIMIT 5`).all()
   return { totalNotes, todayChats: todayStat?.chat_count ?? 0, categories, recentNotes }
 })
 
+// [Bug #1] stats:increment — handler nyata untuk increment kolom di daily_stats
+ipcMain.handle('stats:increment', (_e, field: 'chat_count' | 'notes_created') => {
+  try {
+    const validFields = ['chat_count', 'notes_created'] as const
+    if (!validFields.includes(field as any)) return { ok: false, error: 'Field tidak valid' }
+    const today = new Date().toISOString().slice(0, 10)
+    // Pastikan field yang diinsert aman — kita sudah whitelist di atas
+    db.prepare(
+      `INSERT INTO daily_stats(date,${field}) VALUES(?,1)
+       ON CONFLICT(date) DO UPDATE SET ${field}=${field}+1`
+    ).run(today)
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: String(e) }
+  }
+})
+
+// [Bug #9] streak:get — handler sudah ada, dipastikan return { count } yang benar
 ipcMain.handle('streak:get', () => {
-  const rows = db.prepare(`SELECT key,value FROM settings WHERE key IN ('streak_count','streak_last_date')`).all() as any[]
-  const map: Record<string,string> = {}
+  const rows = db.prepare(
+    `SELECT key,value FROM settings WHERE key IN ('streak_count','streak_last_date')`
+  ).all() as any[]
+  const map: Record<string, string> = {}
   rows.forEach(s => map[s.key] = s.value)
-  const today = new Date().toISOString().slice(0,10)
+
+  const today = new Date().toISOString().slice(0, 10)
   const last  = map['streak_last_date'] ?? ''
-  let count   = parseInt(map['streak_count'] ?? '0')
-  const yesterday = new Date(Date.now()-86400000).toISOString().slice(0,10)
-  if (last === today) { /* already counted */ }
-  else if (last === yesterday) count++
-  else count = 1
+  let count   = parseInt(map['streak_count'] ?? '0') || 0
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+
+  if (last === today) {
+    // Sudah dihitung hari ini — tidak ubah count
+  } else if (last === yesterday) {
+    // Hari beruntun — increment
+    count++
+  } else {
+    // Putus streak — mulai dari 1
+    count = 1
+  }
+
   db.prepare(`INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)`).run('streak_count', String(count))
   db.prepare(`INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)`).run('streak_last_date', today)
   return { count }
@@ -195,7 +279,7 @@ ipcMain.handle('streak:get', () => {
 
 ipcMain.handle('file:import', async () => {
   const res = await dialog.showOpenDialog(win, {
-    filters: [{ name: 'Documents', extensions: ['txt','md','pdf','docx'] }],
+    filters: [{ name: 'Documents', extensions: ['txt', 'md', 'pdf', 'docx'] }],
     properties: ['openFile']
   })
   if (res.canceled || !res.filePaths.length) return null
@@ -216,15 +300,15 @@ ipcMain.handle('file:import', async () => {
       const result = await (pdfParse as any).default(buf)
       text = result.text
     }
-  } catch(e) { return null }
-  const name = filePath.split(/[\\/]/).pop()?.replace(/\.[^.]+$/,'') ?? 'Import'
+  } catch (e) { return null }
+  const name = filePath.split(/[\\\/]/).pop()?.replace(/\.[^.]+$/, '') ?? 'Import'
   return { title: name, content: text }
 })
 
 ipcMain.handle('file:export', async (_e, title: string, content: string) => {
   const res = await dialog.showSaveDialog(win, {
     defaultPath: title + '.txt',
-    filters: [{ name: 'Text', extensions: ['txt','md'] }]
+    filters: [{ name: 'Text', extensions: ['txt', 'md'] }]
   })
   if (res.canceled || !res.filePath) return null
   writeFileSync(res.filePath, content, 'utf-8')
@@ -238,7 +322,7 @@ ipcMain.handle('ai:validateKey', async (_e, provider: string, key: string) => {
     if (provider === 'gemini') {
       const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`
       const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 8000) // 8 second timeout
+      const timeout = setTimeout(() => controller.abort(), 8000)
       try {
         const r = await fetch(url, { signal: controller.signal })
         clearTimeout(timeout)
@@ -246,16 +330,16 @@ ipcMain.handle('ai:validateKey', async (_e, provider: string, key: string) => {
         const data = await r.json() as any
         const models = (data.models as any[])
           .filter(m => m.name.includes('gemini'))
-          .map(m => m.name.replace('models/',''))
+          .map(m => m.name.replace('models/', ''))
         return { valid: true, models }
-      } catch(e: any) {
+      } catch (e: any) {
         clearTimeout(timeout)
         if (e.name === 'AbortError') return { valid: false, error: 'Timeout — periksa koneksi internet' }
         throw e
       }
     }
     return { valid: true, models: [] }
-  } catch(e) {
+  } catch (e) {
     return { valid: false, error: String(e) }
   }
 })

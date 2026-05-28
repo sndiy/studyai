@@ -43,6 +43,7 @@ export type View = 'notes' | 'ai' | 'stats' | 'settings'
 declare global {
   interface Window {
     api: {
+      streak: any
       window: {
         minimize: () => void
         maximize: () => void
@@ -72,6 +73,7 @@ declare global {
         delete: (id: string) => Promise<{success: boolean}>
       }
       stats: {
+        get(): unknown
         today:     () => Promise<any>
         increment: (field: 'chat_count' | 'study_minutes') => Promise<{success: boolean}>
         getRange:  (days: number) => Promise<any[]>
