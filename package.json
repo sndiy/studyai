@@ -1,6 +1,6 @@
 {
   "name": "studyai",
-  "version": "0.5.0",
+  "version": "1.0.0",
   "description": "StudyAI — Desktop Study Assistant with AI",
   "main": "out/main/index.js",
   "scripts": {
@@ -12,10 +12,20 @@
     "package:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
+    "@tiptap/extension-color": "^3.23.6",
+    "@tiptap/extension-highlight": "^3.23.6",
+    "@tiptap/extension-placeholder": "^3.23.6",
+    "@tiptap/extension-text-align": "^3.23.6",
+    "@tiptap/extension-text-style": "^3.23.6",
+    "@tiptap/extension-underline": "^3.23.6",
+    "@tiptap/pm": "^3.23.6",
+    "@tiptap/react": "^3.23.6",
+    "@tiptap/starter-kit": "^3.23.6",
     "better-sqlite3": "^11.0.0",
     "mammoth": "^1.7.2",
     "marked": "^12.0.0",
-    "pdf-parse": "^1.1.1"
+    "pdf-parse": "^1.1.1",
+    "turndown": "^7.2.4"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
@@ -23,6 +33,7 @@
     "@types/pdf-parse": "^1.1.5",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.0",
+    "@types/turndown": "^5.0.6",
     "@vitejs/plugin-react": "^4.2.1",
     "electron": "^30.5.1",
     "electron-builder": "^24.13.3",
@@ -36,9 +47,17 @@
   "build": {
     "appId": "com.sndiy.studyai",
     "productName": "StudyAI",
-    "directories": { "output": "release" },
-    "files": ["out/**/*"],
-    "win": { "target": "nsis" },
-    "linux": { "target": "AppImage" }
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   }
 }
