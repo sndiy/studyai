@@ -36,7 +36,7 @@ export default function Stats() {
               const pct = stats.totalNotes > 0 ? Math.round((c.c / stats.totalNotes) * 100) : 0
               return (
                 <div key={c.category} className="cat-bar-row">
-                  <span className="cat-bar-label">{c.category}</span>
+                  <span className="cat-bar-label"><i className="ti ti-folder" />{c.category}</span>
                   <div className="cat-bar-track">
                     <div className="cat-bar-fill" style={{width:`${pct}%`}} />
                   </div>
@@ -53,10 +53,10 @@ export default function Stats() {
           <div className="stats-section-title">Rangkuman Terbaru</div>
           {stats.recentNotes.map(n => (
             <div key={n.id} className="recent-note-row">
-              <div className="recent-note-title">{n.title}</div>
+              <div className="recent-note-title"><i className="ti ti-file-text" />{n.title}</div>
               <div className="recent-note-meta">
-                <span className="note-cat">{n.category}</span>
-                <span>{n.updated_at}</span>
+                <span className="note-cat"><i className="ti ti-tag" />{n.category}</span>
+                <i className="ti ti-calendar" /><span>{n.updated_at}</span>
               </div>
             </div>
           ))}

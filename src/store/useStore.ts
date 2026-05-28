@@ -124,10 +124,10 @@ export const useStore = create<StoreState>((set, get) => ({
     try {
       let res: any
       const version = '2.0'
-      if (format === 'json')       res = await window.api.file.exportJson(notes, version)
+      if (format === 'json')           res = await window.api.file.exportJson(notes, version)
       else if (format === 'md_single') res = await window.api.file.exportMdSingle(notes)
       else if (format === 'md_folder') res = await window.api.file.exportMdFolder(notes)
-      else if (format === 'txt')   res = await window.api.file.exportTxtBulk(notes)
+      else if (format === 'txt')       res = await window.api.file.exportTxtBulk(notes)
       if (res?.success) {
         const msg = res.folder
           ? `✓ ${res.count} file .md tersimpan di folder`
@@ -152,9 +152,9 @@ export const useStore = create<StoreState>((set, get) => ({
     set({ importStatus: 'Membaca file...', importPreview: [] })
     try {
       let res: any
-      if (format === 'json') res = await window.api.file.importJson()
-      else if (format === 'md') res = await window.api.file.importMdFiles()
-      else if (format === 'txt') res = await window.api.file.importTxtFiles()
+      if (format === 'json')      res = await window.api.file.importJson()
+      else if (format === 'md')   res = await window.api.file.importMdFiles()
+      else if (format === 'txt')  res = await window.api.file.importTxtFiles()
       if (res?.notes?.length > 0) {
         set({ importPreview: res.notes, importStatus: `${res.notes.length} rangkuman siap di-import` })
       } else if (res?.error) {
@@ -187,7 +187,6 @@ export const useStore = create<StoreState>((set, get) => ({
           added++
         }
       } else {
-        // New note
         const created = await window.api.notes.create({ title: n.title, category: n.category })
         await window.api.notes.save({ id: created.id, title: n.title, content: n.content, category: n.category })
         added++
@@ -235,8 +234,14 @@ export const useStore = create<StoreState>((set, get) => ({
   },
 
   sendMessage: async (userText, noteId, useContext, useWebSearch = false) => {
-    const { settings, selectedNote } = get()
+    const { settings, selectedNote, notes } = get()
     if (!settings || !userText.trim()) return
+
+    // Tentukan catatan konteks: prioritaskan noteId (dari chat bebas dengan pilihan manual),
+    // fallback ke selectedNote (dari chat yang dipasangkan dengan editor)
+    const contextNote = noteId
+      ? (notes.find(n => String(n.id) === noteId) ?? selectedNote)
+      : selectedNote
 
     const currentStatus = get().aiStatus
     if (currentStatus === 'streaming' || currentStatus === 'sending') return
@@ -264,7 +269,7 @@ export const useStore = create<StoreState>((set, get) => ({
     set(state => ({ messages: [...state.messages, userMsg] }))
 
     // Increment stats
-    try { window.api.stats?.increment?.('chat_count') } catch {} // optional stat
+    try { window.api.stats?.increment?.('chat_count') } catch {}
 
     // Build system prompt
     const maxTokens = parseInt(settings.max_tokens || '2048') || 2048
@@ -275,27 +280,26 @@ export const useStore = create<StoreState>((set, get) => ({
     let systemPrompt = `${personaPrompt}\n\n${personaLimit}`
     let chunkInfo = ''
 
-    if (useContext && selectedNote?.content) {
+    if (useContext && contextNote?.content) {
       set({ aiStatus: 'chunking', aiStatusDetail: 'Memecah dokumen...' })
-      const allChunks = chunkText(selectedNote.content)
+      const allChunks = chunkText(contextNote.content)
       const totalChunks = allChunks.length
       if (totalChunks > 1) {
         set({ aiStatus: 'selecting', aiStatusDetail: `Memilih bagian relevan dari ${totalChunks} segmen...` })
         const relevant = selectRelevantChunks(allChunks, userText, 3)
         const contextText = formatChunksAsContext(relevant, totalChunks)
         chunkInfo = `(${relevant.length}/${totalChunks} segmen digunakan)`
-        systemPrompt += `\n\nKonteks dari dokumen "${selectedNote.title}" ${chunkInfo}:\n---\n${contextText}\n---`
+        systemPrompt += `\n\nKonteks dari dokumen "${contextNote.title}" ${chunkInfo}:\n---\n${contextText}\n---`
       } else if (totalChunks === 1) {
-        systemPrompt += `\n\nKonteks materi dari "${selectedNote.title}":\n---\n${allChunks[0].text}\n---`
+        systemPrompt += `\n\nKonteks materi dari "${contextNote.title}":\n---\n${allChunks[0].text}\n---`
       }
     }
 
-    // Web search context note
     if (useWebSearch) {
       systemPrompt += '\n\nJika informasi di rangkuman TIDAK LENGKAP atau TIDAK ADA, gunakan pengetahuan terbaikmu berdasarkan data training. Selalu prioritaskan isi rangkuman pengguna sebagai sumber utama.'
     }
 
-    // Bangun history lengkap: history lama + pesan user baru (sekali saja)
+    // Bangun history lengkap: history lama + pesan user baru
     const rawHistory = [
       ...historyBeforeUserMsg,
       { role: 'user', content: userText }
@@ -314,7 +318,6 @@ export const useStore = create<StoreState>((set, get) => ({
     set({
       abortController,
       aiStatus: 'sending',
-      // Tampilkan info token ke user — lebih transparan dari sebelumnya
       aiStatusDetail: chunkInfo ? `${chunkInfo} · ${tokenInfo}` : tokenInfo,
       streamingText: ''
     })
@@ -361,7 +364,6 @@ export const useStore = create<StoreState>((set, get) => ({
         maxOutputTokens: maxTokens
       })
     } finally {
-      // Pastikan status selalu kembali idle, termasuk saat abort/error
       const current = get().aiStatus
       if (current !== 'idle') {
         set({ aiStatus: 'idle', aiStatusDetail: '', streamingText: '', abortController: null })
@@ -407,13 +409,11 @@ export const useStore = create<StoreState>((set, get) => ({
       ])
       const todayStats = statsData
 
-      // Build category distribution
       const catMap: Record<string, number> = {}
       notes.forEach((n: Note) => {
         const c = n.category || 'Umum'
         catMap[c] = (catMap[c] || 0) + 1
       })
-      const _rangeStats = [] // unused
       const categories = Object.entries(catMap).map(([category, c]) => ({ category, c })).sort((a, b) => b.c - a.c)
 
       const stats: Stats = {
@@ -423,7 +423,6 @@ export const useStore = create<StoreState>((set, get) => ({
         recentNotes: notes.slice(0, 5)
       }
 
-      // Streak calculation
       const streakVal = parseInt(settings.streak_count || '0') || 0
       set({ stats, streak: streakVal })
     } catch (e) {

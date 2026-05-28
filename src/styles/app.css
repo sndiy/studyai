@@ -5,34 +5,11 @@
   height: 100vh; width: 100vw; overflow: hidden;
 }
 
-/* ── Titlebar ─────────────────────────────────────────────────────────────── */
-.titlebar {
-  height: 36px; display: flex; align-items: center;
-  background: #0a0a12; border-bottom: 0.5px solid var(--border);
-  flex-shrink: 0; -webkit-app-region: drag; user-select: none;
-}
-.titlebar-drag { flex: 1; height: 100%; }
-.titlebar-controls {
-  display: flex; align-items: center; gap: 4px;
-  padding: 0 10px;
-  -webkit-app-region: no-drag; /* CRITICAL: kontrol window tidak ikut drag */
-}
-.tb-ctrl {
-  width: 26px; height: 22px; border-radius: 4px; background: none;
-  color: var(--text-dim); font-size: 12px;
-  display: flex; align-items: center; justify-content: center; transition: all 0.15s;
-  -webkit-app-region: no-drag;
-}
-.tb-ctrl:hover      { background: var(--bg-elevated); color: var(--text-secondary); }
-.tb-ctrl.close:hover { background: rgba(220,70,70,0.2); color: var(--red); }
-
 /* ── Body ─────────────────────────────────────────────────────────────────── */
-.app-body { display: flex; flex: 1; overflow: hidden; }
+.app-body { display: flex; flex: 1; overflow: hidden; height: 100%; }
 .main-area {
   flex: 1; display: flex; flex-direction: column; overflow: hidden;
   background: var(--bg-base);
-  /* CRITICAL: pastikan area konten tidak ikut drag region titlebar */
-  -webkit-app-region: no-drag;
 }
 
 /* ── Editor layout ────────────────────────────────────────────────────────── */

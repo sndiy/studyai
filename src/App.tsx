@@ -29,7 +29,6 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <TitleBar />
       <div className="app-body">
         <Sidebar />
         <main className="main-area">
@@ -38,25 +37,6 @@ export default function App() {
       </div>
       {showExport && <ExportModal onClose={() => setShowExport(false)} />}
       {showImport && <ImportModal onClose={() => setShowImport(false)} />}
-    </div>
-  )
-}
-
-function TitleBar() {
-  return (
-    <div className="titlebar">
-      <div className="titlebar-drag" />
-      <div className="titlebar-controls">
-        <button className="tb-ctrl close"   onClick={() => window.api.window.close()}>
-          <i className="ti ti-x" />
-        </button>
-        <button className="tb-ctrl min"     onClick={() => window.api.window.minimize()}>
-          <i className="ti ti-minus" />
-        </button>
-        <button className="tb-ctrl max"     onClick={() => window.api.window.maximize()}>
-          <i className="ti ti-copy" />
-        </button>
-      </div>
     </div>
   )
 }

@@ -465,3 +465,190 @@
 .msg-content.md-preview th {
   background: var(--bg-elevated); color: var(--text-primary);
 }
+
+/* ── Context toggle warning state ─────────────────────────────────────────── */
+.ctx-toggle.ctx-warn {
+  border-color: rgba(255, 160, 60, 0.4);
+  color: #e0954a;
+  background: rgba(255, 160, 60, 0.08);
+}
+.ctx-toggle.ctx-warn .ti { color: #e0954a; }
+
+/* ── Context picker dropdown ──────────────────────────────────────────────── */
+.ctx-picker-dropdown {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 200;
+  min-width: 240px;
+  max-width: 300px;
+  background: var(--bg-elevated);
+  border: 0.5px solid var(--border-sub);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  overflow: hidden;
+  animation: dropUp 0.14s ease;
+}
+
+@keyframes dropUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.ctx-picker-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  border-bottom: 0.5px solid var(--border-sub);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.ctx-picker-list {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.ctx-picker-list::-webkit-scrollbar { width: 3px; }
+.ctx-picker-list::-webkit-scrollbar-thumb { background: var(--border-sub); border-radius: 4px; }
+
+.ctx-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.12s;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.ctx-picker-item:hover {
+  background: var(--bg-overlay);
+  color: var(--text-secondary);
+}
+
+.ctx-picker-item.sel {
+  background: var(--accent-bg);
+  color: var(--accent-soft);
+}
+
+.ctx-picker-item .ti {
+  font-size: 13px;
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+
+.ctx-picker-item.sel .ti { color: var(--accent); }
+
+.ctx-picker-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.ctx-picker-title {
+  font-size: 12.5px;
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ctx-picker-cat {
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+
+.ctx-picker-empty {
+  padding: 10px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* ── Active context bar ───────────────────────────────────────────────────── */
+.ctx-active-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: var(--accent-bg);
+  border: 0.5px solid #3a3060;
+  border-radius: 7px;
+  font-size: 11.5px;
+  color: var(--accent-soft);
+  animation: fadeIn 0.15s ease;
+}
+
+.ctx-active-bar .ti {
+  font-size: 12px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.ctx-active-bar strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.ctx-active-cat {
+  padding: 1px 7px;
+  background: rgba(100,90,200,0.15);
+  border-radius: 10px;
+  font-size: 10.5px;
+  color: var(--accent-soft);
+  margin-left: 2px;
+}
+
+.ctx-active-change {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: transparent;
+  border: 0.5px solid #3a3060;
+  color: var(--accent-soft);
+  font-size: 10.5px;
+  cursor: pointer;
+  transition: background 0.12s;
+  white-space: nowrap;
+}
+
+.ctx-active-change:hover { background: rgba(100,90,200,0.15); }
+.ctx-active-change .ti { font-size: 10px; }
+
+/* ── Warning bar ──────────────────────────────────────────────────────────── */
+.ctx-warn-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: rgba(255, 160, 60, 0.06);
+  border: 0.5px solid rgba(255, 160, 60, 0.25);
+  border-radius: 7px;
+  font-size: 11.5px;
+  color: #c8864a;
+  animation: fadeIn 0.15s ease;
+}
+
+.ctx-warn-bar .ti {
+  font-size: 12px;
+  color: #e0954a;
+  flex-shrink: 0;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

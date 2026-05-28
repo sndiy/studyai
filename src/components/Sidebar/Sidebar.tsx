@@ -77,6 +77,7 @@ export default function Sidebar() {
       <div className="note-list">
         {filtered.length === 0 && (
           <div className="note-empty">
+            <i className={`ti ${searchQuery ? 'ti-search-off' : 'ti-notebook-off'}`} />
             {searchQuery ? 'Tidak ada hasil' : 'Belum ada rangkuman'}
           </div>
         )}
@@ -86,10 +87,14 @@ export default function Sidebar() {
             className={`note-card ${selectedNote?.id === note.id ? 'active' : ''}`}
             onClick={() => { selectNote(note); setView('notes') }}
           >
-            <div className="note-card-title">{note.title}</div>
+            <div className="note-card-title">
+              <i className="ti ti-file-text" />
+              {note.title}
+            </div>
             <div className="note-card-meta">
-              <span className="note-cat">{note.category}</span>
+              <span className="note-cat"><i className="ti ti-tag" />{note.category}</span>
               <span>·</span>
+              <i className="ti ti-clock" />
               <span>{timeAgo(note.updated_at)}</span>
             </div>
           </div>

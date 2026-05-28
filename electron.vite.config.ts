@@ -21,6 +21,7 @@ export default defineConfig({
   },
   renderer: {
     root: 'src',
+    assetsInclude: ['**/*.woff', '**/*.woff2', '**/*.ttf'],
     build: {
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/index.html') }

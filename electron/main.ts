@@ -56,7 +56,8 @@ let win: BrowserWindow
 function createWindow() {
   win = new BrowserWindow({
     width: 1280, height: 760, minWidth: 900, minHeight: 600,
-    frame: false, titleBarStyle: 'hidden', backgroundColor: '#0b0b0f',
+    backgroundColor: '#0b0b0f',
+    autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true, nodeIntegration: false
