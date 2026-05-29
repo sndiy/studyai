@@ -156,6 +156,29 @@ export default function Editor() {
   const colorRef   = useRef<HTMLDivElement>(null)
   const hlRef      = useRef<HTMLDivElement>(null)
 
+  // Gunakan ref untuk state agar Tiptap onUpdate tidak menggunakan closure lama
+  const stateRef = useRef({ title, category, selectedNote })
+  useEffect(() => {
+    stateRef.current = { title, category, selectedNote }
+  }, [title, category, selectedNote])
+
+  const scheduleSave = useCallback((t: string, c: string, cat: string) => {
+    const currentNote = stateRef.current.selectedNote
+    if (!currentNote) return
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(async () => {
+      await saveNote(String(currentNote.id), t, c, cat)
+      setSaved(true)
+    }, 800)
+  }, [saveNote])
+
+  const scheduleSaveRef = useRef(scheduleSave)
+  useEffect(() => {
+    scheduleSaveRef.current = scheduleSave
+  }, [scheduleSave])
+
+  const isBindingRef = useRef(false)
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
@@ -168,8 +191,10 @@ export default function Editor() {
     ],
     content: '',
     onUpdate: ({ editor }) => {
+      if (isBindingRef.current) return
       const md = turndown.turndown(editor.getHTML())
-      scheduleSave(title, md, category)
+      const { title: t, category: c } = stateRef.current
+      scheduleSaveRef.current(t, md, c)
       setSaved(false)
     },
     editorProps: {
@@ -187,17 +212,15 @@ export default function Editor() {
 
     const raw    = selectedNote.content || ''
     const isHTML = /<[a-z][\s\S]*>/i.test(raw)
+    
+    isBindingRef.current = true
     editor.commands.setContent(isHTML ? raw : mdToHtml(raw), false)
+    setTimeout(() => {
+      isBindingRef.current = false
+    }, 50)
   }, [selectedNote?.id, editor])
 
-  const scheduleSave = useCallback((t: string, c: string, cat: string) => {
-    if (!selectedNote) return
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(async () => {
-      await saveNote(String(selectedNote.id), t, c, cat)
-      setSaved(true)
-    }, 800)
-  }, [selectedNote, saveNote])
+  // scheduleSave telah dipindahkan ke atas untuk mengatasi bug stale closure
 
   // Tutup picker saat klik luar
   useEffect(() => {
