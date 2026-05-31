@@ -8,6 +8,7 @@ import Highlight from '@tiptap/extension-highlight'
 import Placeholder from '@tiptap/extension-placeholder'
 import Underline from '@tiptap/extension-underline'
 import TurndownService from 'turndown'
+import { marked } from 'marked'
 import { useStore } from '../../store/useStore'
 import './Editor.css'
 
@@ -75,13 +76,14 @@ function FloatingMenu({ editor }: { editor: any }) {
       setPos({ top, left })
     }
 
+    const onBlur = () => setPos(null)
     editor.on('selectionUpdate', update)
-    editor.on('blur', () => setPos(null))
+    editor.on('blur', onBlur)
     document.addEventListener('selectionchange', update)
 
     return () => {
       editor.off('selectionUpdate', update)
-      editor.off('blur')
+      editor.off('blur', onBlur)
       document.removeEventListener('selectionchange', update)
     }
   }, [editor])
@@ -155,6 +157,7 @@ export default function Editor() {
   const saveTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
   const colorRef   = useRef<HTMLDivElement>(null)
   const hlRef      = useRef<HTMLDivElement>(null)
+  const catRef     = useRef<HTMLDivElement>(null)
 
   // Gunakan ref untuk state agar Tiptap onUpdate tidak menggunakan closure lama
   const stateRef = useRef({ title, category, selectedNote })
@@ -202,9 +205,11 @@ export default function Editor() {
     },
   })
 
-  // Load note ke editor
+  // ─── FIX: Load note ke editor dengan clearContent dulu ──────────────────────
   useEffect(() => {
     if (!selectedNote || !editor) return
+
+    // Reset UI state dulu sebelum load konten baru
     setTitle(selectedNote.title)
     setCategory(selectedNote.category)
     setSaved(true)
@@ -212,21 +217,29 @@ export default function Editor() {
 
     const raw    = selectedNote.content || ''
     const isHTML = /<[a-z][\s\S]*>/i.test(raw)
-    
+
     isBindingRef.current = true
-    editor.commands.setContent(isHTML ? raw : mdToHtml(raw), false)
+
+    // PERBAIKAN: clearContent dulu, baru setContent
+    // Ini mencegah Tiptap "merge" node list dari konten lama dengan konten baru
+    editor.chain()
+      .clearContent(false)
+      .setContent(isHTML ? raw : marked.parse(raw) as string, false)
+      .run()
+
+    // Naikkan timeout sedikit untuk safety agar proses setContent selesai dulu
     setTimeout(() => {
       isBindingRef.current = false
-    }, 50)
+    }, 100)
   }, [selectedNote?.id, editor])
-
-  // scheduleSave telah dipindahkan ke atas untuk mengatasi bug stale closure
+  // ──────────────────────────────────────────────────────────────────────────
 
   // Tutup picker saat klik luar
   useEffect(() => {
     const h = (e: MouseEvent) => {
       if (colorRef.current && !colorRef.current.contains(e.target as Node)) setShowColorPicker(false)
       if (hlRef.current   && !hlRef.current.contains(e.target as Node))     setShowHlPicker(false)
+      if (catRef.current  && !catRef.current.contains(e.target as Node))    setShowCatMenu(false)
     }
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
@@ -269,22 +282,25 @@ export default function Editor() {
       {/* Header */}
       <div className="editor-header">
         <div className="cat-row">
-          <div className="cat-pill" onClick={() => setShowCatMenu(v => !v)}>
-            <i className="ti ti-tag" /> {category}
-            <i className="ti ti-chevron-down" style={{ fontSize:10 }} />
-          </div>
-          {showCatMenu && (
-            <div className="cat-dropdown">
-              {CATEGORIES.map(c => (
-                <div key={c} className={`cat-option ${c===category?'sel':''}`}
-                  onClick={() => {
-                    setCategory(c)
-                    scheduleSave(title, turndown.turndown(editor?.getHTML() ?? ''), c)
-                    setShowCatMenu(false)
-                  }}>{c}</div>
-              ))}
+          <div ref={catRef} style={{ position: 'relative' }}>
+            <div className="cat-pill" onClick={() => setShowCatMenu(v => !v)}>
+              <i className="ti ti-tag" /> {category}
+              <i className="ti ti-chevron-down" style={{ fontSize:10 }} />
             </div>
-          )}
+            {showCatMenu && (
+              <div className="cat-dropdown">
+                {CATEGORIES.map(c => (
+                  <div key={c} className={`cat-option ${c===category?'sel':''}`}
+                    onClick={() => {
+                      setCategory(c)
+                      setSaved(false)
+                      scheduleSave(title, turndown.turndown(editor?.getHTML() ?? ''), c)
+                      setShowCatMenu(false)
+                    }}>{c}</div>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="cat-pill green">
             <i className="ti ti-clock" /> {selectedNote.updated_at?.split(',')[1]?.trim() ?? selectedNote.updated_at}
           </div>
@@ -300,6 +316,7 @@ export default function Editor() {
           placeholder="Judul rangkuman..."
           onChange={e => {
             setTitle(e.target.value)
+            setSaved(false)
             scheduleSave(e.target.value, turndown.turndown(editor?.getHTML() ?? ''), category)
           }}
         />
@@ -453,31 +470,4 @@ export default function Editor() {
       </div>
     </div>
   )
-}
-
-// ─── Markdown → HTML sederhana ────────────────────────────────────────────────
-function mdToHtml(md: string): string {
-  if (!md.trim()) return '<p></p>'
-  return md
-    .split('\n\n')
-    .map(block => {
-      if (/^### /.test(block)) return `<h3>${block.replace(/^### /, '')}</h3>`
-      if (/^## /.test(block))  return `<h2>${block.replace(/^## /, '')}</h2>`
-      if (/^# /.test(block))   return `<h1>${block.replace(/^# /, '')}</h1>`
-      if (/^> /.test(block))   return `<blockquote><p>${block.replace(/^> /, '')}</p></blockquote>`
-      if (/^[-*] /.test(block)) {
-        const items = block.split('\n').map(l => `<li>${l.replace(/^[-*] /, '')}</li>`).join('')
-        return `<ul>${items}</ul>`
-      }
-      if (/^\d+\. /.test(block)) {
-        const items = block.split('\n').map(l => `<li>${l.replace(/^\d+\. /, '')}</li>`).join('')
-        return `<ol>${items}</ol>`
-      }
-      const inline = block
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.+?)\*/g,     '<em>$1</em>')
-        .replace(/`(.+?)`/g,       '<code>$1</code>')
-      return `<p>${inline}</p>`
-    })
-    .join('')
 }
