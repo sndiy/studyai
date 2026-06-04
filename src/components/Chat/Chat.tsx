@@ -10,26 +10,27 @@ export default function Chat({ noteId }: { noteId?: number | null }) {
   const {
     settings, messages, loadHistory, sendMessage, clearHistory,
     streamingText, aiStatus, aiStatusDetail, cancelStream,
-    selectedNote, notes
+    selectedNote
   } = useStore()
 
-  const [input, setInput]                     = useState('')
-  const [useContext, setUseContext]           = useState(true)
-  const [useWebSearch, setWebSearch]          = useState(false)
-  const [confirmClear, setConfirmClear]       = useState(false)
-  const [showCtxPicker, setShowCtxPicker]     = useState(false)
-  const [manualContextId, setManualContextId] = useState<number | null>(null)
+  const [input, setInput]               = useState('')
+  const [useContext, setUseContext]     = useState(true)
+  const [useWebSearch, setWebSearch]    = useState(false)
+  const [confirmClear, setConfirmClear] = useState(false)
+  // Konteks dari file yang dipilih user (title + content, tidak masuk DB)
+  const [fileContext, setFileContext]   = useState<{ title: string; content: string } | null>(null)
 
-  const bottomRef    = useRef<HTMLDivElement>(null)
-  const textareaRef  = useRef<HTMLTextAreaElement>(null)
-  const ctxPickerRef = useRef<HTMLDivElement>(null)
+  const bottomRef   = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const isFreeChat = noteId === null || noteId === undefined
 
-  const contextNote = useContext
-    ? (isFreeChat
-        ? (manualContextId ? notes.find(n => Number(n.id) === manualContextId) ?? null : null)
-        : selectedNote)
+  // Konteks yang aktif: free chat → dari file picker, editor chat → dari selectedNote
+  const contextContent = useContext
+    ? (isFreeChat ? fileContext?.content ?? null : selectedNote?.content ?? null)
+    : null
+  const contextTitle = useContext
+    ? (isFreeChat ? fileContext?.title ?? null : selectedNote?.title ?? null)
     : null
 
   // [Fix] Tambah loadHistory ke dependency array
@@ -37,17 +38,10 @@ export default function Chat({ noteId }: { noteId?: number | null }) {
     loadHistory(isFreeChat ? null : (noteId ? String(noteId) : null))
   }, [noteId, loadHistory])
 
-  // [Fix] Proper indentation & dependency
+  // Reset fileContext saat pindah ke editor chat (non-free)
   useEffect(() => {
-    if (!isFreeChat && selectedNote) setManualContextId(null)
-  }, [selectedNote?.id, isFreeChat])
-
-  // Reset manualContextId kalau note yang dipilih dihapus
-  useEffect(() => {
-    if (manualContextId === null) return
-    const stillExists = notes.some(n => Number(n.id) === manualContextId)
-    if (!stillExists) setManualContextId(null)
-  }, [notes, manualContextId])
+    if (!isFreeChat) setFileContext(null)
+  }, [isFreeChat])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -66,15 +60,7 @@ export default function Chat({ noteId }: { noteId?: number | null }) {
     ta.style.height = Math.min(ta.scrollHeight, 120) + 'px'
   }, [input])
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ctxPickerRef.current && !ctxPickerRef.current.contains(e.target as Node)) {
-        setShowCtxPicker(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
+
 
   const isProcessing = aiStatus !== 'idle' && aiStatus !== 'error'
 
@@ -85,35 +71,40 @@ export default function Chat({ noteId }: { noteId?: number | null }) {
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
     textareaRef.current?.focus()
 
-    const sendNoteId = useContext
-      ? (isFreeChat
-          ? (manualContextId ? String(manualContextId) : null)
-          : (noteId ? String(noteId) : null))
-      : null
-
-    await sendMessage(text, sendNoteId, useContext && !!contextNote, useWebSearch)
-  }, [input, isProcessing, noteId, useContext, useWebSearch, sendMessage, isFreeChat, manualContextId, contextNote])
+    // Free chat: pakai fileContext sebagai konteks (inject langsung ke systemPrompt via store)
+    // Editor chat: pakai noteId seperti biasa
+    const sendNoteId = useContext && !isFreeChat && noteId ? String(noteId) : null
+    await sendMessage(text, sendNoteId, useContext && !!contextContent, useWebSearch, null, isFreeChat ? fileContext : null)
+  }, [input, isProcessing, noteId, useContext, useWebSearch, sendMessage, isFreeChat, fileContext, contextContent])
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
   }
 
-  const handleToggleContext = () => {
+  const handleToggleContext = async () => {
     const next = !useContext
     setUseContext(next)
-    if (next && isFreeChat && !manualContextId && notes.length > 0) {
-      setShowCtxPicker(true)
+    // Kalau aktifkan konteks di free chat dan belum ada file → langsung buka picker
+    if (next && isFreeChat && !fileContext) {
+      const result = await window.api.file.openAsContext()
+      if (result) setFileContext({ title: result.title, content: result.content })
+    }
+  }
+
+  const handlePickFile = async () => {
+    const result = await window.api.file.openAsContext()
+    if (result) {
+      setFileContext({ title: result.title, content: result.content })
+      setUseContext(true)
     }
   }
 
   const personaName = settings?.persona_name ?? 'Mai'
 
   const ctxLabel = useContext
-    ? (contextNote
-        ? contextNote.title.length > 20
-          ? contextNote.title.slice(0, 20) + '…'
-          : contextNote.title
-        : isFreeChat ? 'Pilih Catatan…' : 'Tanpa Catatan')
+    ? (contextTitle
+        ? contextTitle.length > 20 ? contextTitle.slice(0, 20) + '…' : contextTitle
+        : isFreeChat ? 'Pilih File…' : 'Tanpa Catatan')
     : 'Tanpa Konteks'
 
   return (
@@ -167,12 +158,12 @@ export default function Chat({ noteId }: { noteId?: number | null }) {
         {messages.length === 0 && !streamingText && aiStatus === 'idle' && (
           <WelcomeScreen
             personaName={personaName}
-            hasContext={useContext && !!contextNote}
-            noteTitle={contextNote?.title}
+            hasContext={useContext && !!contextContent}
+            noteTitle={contextTitle ?? undefined}
             webSearch={useWebSearch}
             isFreeChat={isFreeChat}
-            noContextNote={useContext && isFreeChat && !manualContextId}
-            onPickContext={() => setShowCtxPicker(true)}
+            noContextFile={useContext && isFreeChat && !fileContext}
+            onPickFile={handlePickFile}
           />
         )}
         {messages.map((msg, i) => (
@@ -193,64 +184,23 @@ export default function Chat({ noteId }: { noteId?: number | null }) {
       <div className="chat-input-area">
         <div className="chat-controls">
 
-          {/* Tombol Pakai Konteks */}
-          <div style={{ position: 'relative' }} ref={ctxPickerRef}>
-            <button
-              className={`ctx-toggle ${useContext ? 'on' : ''} ${useContext && !contextNote && isFreeChat ? 'ctx-warn' : ''}`}
-              onClick={handleToggleContext}
-              title={useContext ? 'Klik untuk nonaktifkan konteks' : 'Klik untuk aktifkan konteks catatan'}
-            >
-              <i className="ti ti-file-text" />
-              {ctxLabel}
-              {isFreeChat && useContext && (
-                <i
-                  className="ti ti-chevron-down"
-                  style={{ fontSize: 10, marginLeft: 2, opacity: 0.7 }}
-                  onClick={(e) => { e.stopPropagation(); setShowCtxPicker(v => !v) }}
-                />
-              )}
-            </button>
-
-            {isFreeChat && showCtxPicker && (
-              <div className="ctx-picker-dropdown">
-                <div className="ctx-picker-header">
-                  <i className="ti ti-books" /> Pilih catatan sebagai konteks
-                </div>
-                <div className="ctx-picker-list">
-                  <div
-                    className={`ctx-picker-item ${!manualContextId ? 'sel' : ''}`}
-                    onClick={() => { setManualContextId(null); setShowCtxPicker(false) }}
-                  >
-                    <i className="ti ti-x" />
-                    <span>Tanpa catatan</span>
-                  </div>
-                  {notes.length === 0 && (
-                    <div className="ctx-picker-empty">Belum ada catatan tersimpan</div>
-                  )}
-                  {notes.map(n => (
-                    <div
-                      key={n.id}
-                      className={`ctx-picker-item ${manualContextId === Number(n.id) ? 'sel' : ''}`}
-                      onClick={() => {
-                        setManualContextId(Number(n.id))
-                        setUseContext(true)
-                        setShowCtxPicker(false)
-                      }}
-                    >
-                      <i className="ti ti-file-text" />
-                      <div className="ctx-picker-info">
-                        <span className="ctx-picker-title">{n.title || 'Tanpa judul'}</span>
-                        <span className="ctx-picker-cat">{n.category}</span>
-                      </div>
-                      {manualContextId === Number(n.id) && (
-                        <i className="ti ti-check" style={{ marginLeft: 'auto', color: 'var(--accent)', fontSize: 11 }} />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
+          {/* Tombol Pakai Konteks — klik buka file picker (.md/.json/.txt) */}
+          <button
+            className={`ctx-toggle ${useContext ? 'on' : ''} ${useContext && !contextContent && isFreeChat ? 'ctx-warn' : ''}`}
+            onClick={handleToggleContext}
+            title={useContext ? 'Klik untuk nonaktifkan konteks' : 'Klik untuk pilih file konteks'}
+          >
+            <i className="ti ti-file-text" />
+            {ctxLabel}
+            {isFreeChat && fileContext && useContext && (
+              <i
+                className="ti ti-refresh"
+                style={{ fontSize: 10, marginLeft: 4, opacity: 0.7 }}
+                onClick={e => { e.stopPropagation(); handlePickFile() }}
+                title="Ganti file konteks"
+              />
             )}
-          </div>
+          </button>
 
           {/* Web Search toggle */}
           <button
@@ -265,29 +215,24 @@ export default function Chat({ noteId }: { noteId?: number | null }) {
           <AIStatusBadge status={aiStatus} detail={aiStatusDetail} />
         </div>
 
-        {useContext && contextNote && (
+        {useContext && contextTitle && (
           <div className="ctx-active-bar">
             <i className="ti ti-file-text" />
-            <span>Konteks: <strong>{contextNote.title || 'Tanpa judul'}</strong></span>
-            <span className="ctx-active-cat">{contextNote.category}</span>
+            <span>Konteks: <strong>{contextTitle}</strong></span>
             {isFreeChat && (
-              <button
-                className="ctx-active-change"
-                onClick={() => setShowCtxPicker(true)}
-                title="Ganti catatan konteks"
-              >
+              <button className="ctx-active-change" onClick={handlePickFile} title="Ganti file">
                 <i className="ti ti-pencil" /> Ganti
               </button>
             )}
           </div>
         )}
 
-        {useContext && isFreeChat && !manualContextId && (
+        {useContext && isFreeChat && !fileContext && (
           <div className="ctx-warn-bar">
             <i className="ti ti-alert-circle" />
-            <span>Belum ada catatan dipilih sebagai konteks.</span>
-            <button className="ctx-active-change" onClick={() => setShowCtxPicker(true)}>
-              <i className="ti ti-plus" /> Pilih
+            <span>Belum ada file dipilih sebagai konteks.</span>
+            <button className="ctx-active-change" onClick={handlePickFile}>
+              <i className="ti ti-folder-open" /> Pilih File
             </button>
           </div>
         )}
@@ -317,14 +262,14 @@ export default function Chat({ noteId }: { noteId?: number | null }) {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function WelcomeScreen({ personaName, hasContext, noteTitle, webSearch, isFreeChat, noContextNote, onPickContext }: {
+function WelcomeScreen({ personaName, hasContext, noteTitle, webSearch, isFreeChat, noContextFile, onPickFile }: {
   personaName: string
   hasContext: boolean
   noteTitle?: string
   webSearch: boolean
   isFreeChat: boolean
-  noContextNote: boolean
-  onPickContext: () => void
+  noContextFile: boolean
+  onPickFile: () => void
 }) {
   return (
     <div className="chat-welcome">
@@ -337,16 +282,16 @@ function WelcomeScreen({ personaName, hasContext, noteTitle, webSearch, isFreeCh
       </div>
       {hasContext && noteTitle && (
         <div className="context-badge">
-          <i className="ti ti-file-text" /> Konteks aktif: {noteTitle}
+          <i className="ti ti-file-text" /> Konteks: {noteTitle}
         </div>
       )}
-      {noContextNote && (
+      {noContextFile && (
         <button
           className="context-badge"
           style={{ cursor: 'pointer', border: '0.5px dashed var(--border-sub)', background: 'transparent', marginTop: 8 }}
-          onClick={onPickContext}
+          onClick={onPickFile}
         >
-          <i className="ti ti-plus" /> Pilih catatan sebagai konteks
+          <i className="ti ti-folder-open" /> Pilih file konteks (.md / .json / .txt)
         </button>
       )}
       {webSearch && (

@@ -213,6 +213,45 @@ ipcMain.handle('file:registerPath', (_e, noteId: number, filePath: string) => {
   return { ok: true }
 })
 
+// ── Buka file sebagai konteks chat (tidak masuk DB) ──────────────────────────
+// Filter hanya .md, .json, .txt sesuai format yang didukung
+ipcMain.handle('file:openAsContext', async () => {
+  const res = await dialog.showOpenDialog(win, {
+    title: 'Pilih file sebagai konteks',
+    filters: [
+      { name: 'Markdown',   extensions: ['md']   },
+      { name: 'JSON',       extensions: ['json']  },
+      { name: 'Plain Text', extensions: ['txt']   },
+    ],
+    properties: ['openFile']
+  })
+  if (res.canceled || !res.filePaths.length) return null
+
+  const filePath = res.filePaths[0]
+  const ext = filePath.split('.').pop()?.toLowerCase()
+  const name = filePath.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, '') ?? 'File'
+
+  try {
+    let text = readFileSync(filePath, 'utf-8').trim()
+
+    if (ext === 'json') {
+      try {
+        const parsed = JSON.parse(text)
+        // Kalau format export studyai, ambil content-nya saja
+        if (parsed?.note?.content) {
+          return { title: parsed.note.title ?? name, content: parsed.note.content, filePath }
+        }
+        // JSON lain → stringify pretty
+        text = JSON.stringify(parsed, null, 2)
+      } catch { /* bukan JSON valid, pakai raw */ }
+    }
+
+    return { title: name, content: text, filePath }
+  } catch (e) {
+    return null
+  }
+})
+
 // ── file:save — langsung tulis ke path yang sudah ditrack (dari import)
 // ── file:saveAs — buka dialog Save As (pertama kali / note baru)
 ipcMain.handle('file:save', async (_e, note: { id: number; title: string; content: string; category?: string }) => {

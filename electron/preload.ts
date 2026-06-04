@@ -40,10 +40,11 @@ contextBridge.exposeInMainWorld('api', {
   },
 
   file: {
-    import:       ()          => ipcRenderer.invoke('file:import'),
-    save:         (note: any) => ipcRenderer.invoke('file:save', note),
-    saveAs:       (note: any) => ipcRenderer.invoke('file:saveAs', note),
-    registerPath: (noteId: number, filePath: string) => ipcRenderer.invoke('file:registerPath', noteId, filePath),
+    import:          ()          => ipcRenderer.invoke('file:import'),
+    save:            (note: any) => ipcRenderer.invoke('file:save', note),
+    saveAs:          (note: any) => ipcRenderer.invoke('file:saveAs', note),
+    registerPath:    (noteId: number, filePath: string) => ipcRenderer.invoke('file:registerPath', noteId, filePath),
+    openAsContext:   ()          => ipcRenderer.invoke('file:openAsContext'),
   },
 
   ai: {

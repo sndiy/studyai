@@ -34,7 +34,8 @@ interface StoreState {
     noteId: string | null,
     useContext: boolean,
     useWebSearch?: boolean,
-    sessionId?: string | null
+    sessionId?: string | null,
+    fileContext?: { title: string; content: string } | null
   ) => Promise<void>
   clearHistory: (noteId: string | null, sessionId?: string | null) => Promise<void>
 
@@ -222,7 +223,7 @@ export const useStore = create<StoreState>((set, get) => ({
     }
   },
 
-  sendMessage: async (userText, noteId, useContext, useWebSearch = false, sessionId = null) => {
+  sendMessage: async (userText, noteId, useContext, useWebSearch = false, sessionId = null, fileContext = null) => {
     const { settings, selectedNote, notes } = get()
     if (!settings || !userText.trim()) return
 
@@ -272,6 +273,7 @@ export const useStore = create<StoreState>((set, get) => ({
       let systemPrompt = `${personaPrompt}\n\n${personaLimit}`
       let chunkInfo = ''
 
+      // Konteks dari note (editor chat)
       if (useContext && contextNote?.content) {
         set({ aiStatus: 'chunking', aiStatusDetail: 'Memecah dokumen...' })
         const allChunks = chunkText(contextNote.content)
@@ -284,6 +286,22 @@ export const useStore = create<StoreState>((set, get) => ({
           systemPrompt += `\n\nKonteks dari dokumen "${contextNote.title}" ${chunkInfo}:\n---\n${contextText}\n---`
         } else if (totalChunks === 1) {
           systemPrompt += `\n\nKonteks materi dari "${contextNote.title}":\n---\n${allChunks[0].text}\n---`
+        }
+      }
+
+      // Konteks dari file eksternal (free chat — file picker)
+      if (useContext && fileContext?.content) {
+        set({ aiStatus: 'chunking', aiStatusDetail: 'Memecah file konteks...' })
+        const allChunks = chunkText(fileContext.content)
+        const totalChunks = allChunks.length
+        if (totalChunks > 1) {
+          set({ aiStatus: 'selecting', aiStatusDetail: `Memilih bagian relevan dari ${totalChunks} segmen...` })
+          const relevant = selectRelevantChunks(allChunks, userText, 3)
+          const contextText = formatChunksAsContext(relevant, totalChunks)
+          chunkInfo = `(${relevant.length}/${totalChunks} segmen digunakan)`
+          systemPrompt += `\n\nKonteks dari file "${fileContext.title}" ${chunkInfo}:\n---\n${contextText}\n---`
+        } else if (totalChunks === 1) {
+          systemPrompt += `\n\nKonteks dari file "${fileContext.title}":\n---\n${allChunks[0].text}\n---`
         }
       }
 

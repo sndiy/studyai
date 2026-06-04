@@ -74,10 +74,11 @@ declare global {
         get: () => Promise<{ count: number }>
       }
       file: {
-        import:       () => Promise<{ title: string; content: string; filePath?: string } | null>
-        save:         (note: { id: number; title: string; content: string; category?: string }) => Promise<{ ok: boolean; filePath?: string; noPath?: boolean } | null>
-        saveAs:       (note: { title: string; content: string; category?: string; id?: number }) => Promise<{ ok: boolean; filePath?: string; canceled?: boolean } | null>
-        registerPath: (noteId: number, filePath: string) => Promise<{ ok: boolean } | null>
+        import:        () => Promise<{ title: string; content: string; filePath?: string } | null>
+        save:          (note: { id: number; title: string; content: string; category?: string }) => Promise<{ ok: boolean; filePath?: string; noPath?: boolean } | null>
+        saveAs:        (note: { title: string; content: string; category?: string; id?: number }) => Promise<{ ok: boolean; filePath?: string; canceled?: boolean } | null>
+        registerPath:  (noteId: number, filePath: string) => Promise<{ ok: boolean } | null>
+        openAsContext: () => Promise<{ title: string; content: string; filePath: string } | null>
       }
       ai: {
         validateKey: (provider: string, key: string) => Promise<{ valid: boolean; models?: string[]; error?: string }>
