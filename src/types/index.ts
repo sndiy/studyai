@@ -37,13 +37,11 @@ export interface Stats {
   recentNotes: Note[]
 }
 
-export type Tab = 'editor' | 'chat' | 'providers' | 'stats'
 export type View = 'notes' | 'ai' | 'stats' | 'settings'
 
 declare global {
   interface Window {
     api: {
-      streak: any
       window: {
         minimize: () => void
         maximize: () => void
@@ -51,47 +49,38 @@ declare global {
       }
       notes: {
         getAll:  () => Promise<Note[]>
-        get:     (id: string) => Promise<Note>
-        create:  (data: {title?: string; category?: string}) => Promise<Note>
-        save:    (note: any) => Promise<{success: boolean}>
-        delete:  (id: string) => Promise<{success: boolean}>
-        search:  (q: string) => Promise<Note[]>
+        get:     (id: number) => Promise<Note>
+        create:  (data: { title?: string; category?: string }) => Promise<Note>
+        save:    (note: any) => Promise<{ ok: boolean; updated_at?: string }>
+        delete:  (id: number) => Promise<{ ok: boolean }>
       }
       settings: {
         getAll: () => Promise<Settings>
-        set:    (key: string, value: string) => Promise<{success: boolean}>
+        set:    (key: string, value: string) => Promise<{ ok: boolean }>
       }
       chat: {
         getByNote:   (noteId: string) => Promise<ChatMessage[]>
         getGlobal:   () => Promise<ChatMessage[]>
-        save:        (msg: any) => Promise<{success: boolean}>
-        clearByNote: (noteId: string) => Promise<{success: boolean}>
-      }
-      categories: {
-        getAll: () => Promise<any[]>
-        save:   (cat: any) => Promise<{success: boolean}>
-        delete: (id: string) => Promise<{success: boolean}>
+        save:        (msg: any) => Promise<{ ok: boolean }>
+        clearByNote: (noteId: string) => Promise<{ ok: boolean }>
       }
       stats: {
-        get(): unknown
+        get:       () => Promise<any>
         today:     () => Promise<any>
-        increment: (field: 'chat_count' | 'study_minutes') => Promise<{success: boolean}>
         getRange:  (days: number) => Promise<any[]>
+        increment: (field: string) => Promise<{ ok: boolean }>
+      }
+      streak: {
+        get: () => Promise<{ count: number }>
       }
       file: {
-        import:    () => Promise<{title: string; content: string; source_file?: string; word_count?: number; error?: string} | null>
-        exportTxt: (note: any) => Promise<{success: boolean} | null>
-        exportMd:  (note: any) => Promise<{success: boolean} | null>
-        exportJson:      (notes: any[], version: string) => Promise<{success: boolean} | null>
-        exportMdSingle:  (notes: any[]) => Promise<{success: boolean} | null>
-        exportMdFolder:  (notes: any[]) => Promise<{success: boolean} | null>
-        exportTxtBulk:   (notes: any[]) => Promise<{success: boolean} | null>
-        importJson:      () => Promise<{notes: any[]} | null>
-        importMdFiles:   () => Promise<{notes: any[]} | null>
-        importTxtFiles:  () => Promise<{notes: any[]} | null>
+        import:       () => Promise<{ title: string; content: string; filePath?: string } | null>
+        save:         (note: { id: number; title: string; content: string; category?: string }) => Promise<{ ok: boolean; filePath?: string; noPath?: boolean } | null>
+        saveAs:       (note: { title: string; content: string; category?: string; id?: number }) => Promise<{ ok: boolean; filePath?: string; canceled?: boolean } | null>
+        registerPath: (noteId: number, filePath: string) => Promise<{ ok: boolean } | null>
       }
       ai: {
-        validateKey: (provider: string, key: string) => Promise<{valid: boolean; models?: string[]; error?: string}>
+        validateKey: (provider: string, key: string) => Promise<{ valid: boolean; models?: string[]; error?: string }>
       }
       openExternal: (url: string) => void
     }

@@ -13,11 +13,11 @@ export default function Chat({ noteId }: { noteId?: number | null }) {
     selectedNote, notes
   } = useStore()
 
-  const [input, setInput]               = useState('')
-  const [useContext, setUseContext]      = useState(true)
-  const [useWebSearch, setWebSearch]     = useState(false)
-  const [confirmClear, setConfirmClear]  = useState(false)
-  const [showCtxPicker, setShowCtxPicker] = useState(false)
+  const [input, setInput]                     = useState('')
+  const [useContext, setUseContext]           = useState(true)
+  const [useWebSearch, setWebSearch]          = useState(false)
+  const [confirmClear, setConfirmClear]       = useState(false)
+  const [showCtxPicker, setShowCtxPicker]     = useState(false)
   const [manualContextId, setManualContextId] = useState<number | null>(null)
 
   const bottomRef    = useRef<HTMLDivElement>(null)
@@ -32,30 +32,22 @@ export default function Chat({ noteId }: { noteId?: number | null }) {
         : selectedNote)
     : null
 
+  // [Fix] Tambah loadHistory ke dependency array
   useEffect(() => {
-    if (!isFreeChat) {
-      loadHistory(noteId ? String(noteId) : null)
-    } else {
-      loadHistory(null)
-    }
-  }, [noteId])
+    loadHistory(isFreeChat ? null : (noteId ? String(noteId) : null))
+  }, [noteId, loadHistory])
 
+  // [Fix] Proper indentation & dependency
   useEffect(() => {
-  if (!isFreeChat && selectedNote) {
-    setManualContextId(null)
-  }
-}, [selectedNote?.id])
+    if (!isFreeChat && selectedNote) setManualContextId(null)
+  }, [selectedNote?.id, isFreeChat])
 
-// [Bug #6] Jika note yang dijadikan manualContextId dihapus dari store,
-// paksa reset ke null. Tanpa ini, contextNote tetap undefined tapi
-// manualContextId masih terisi → UI menampilkan konteks "hantu".
-useEffect(() => {
-  if (manualContextId === null) return
-  const stillExists = notes.some(n => Number(n.id) === manualContextId)
-  if (!stillExists) {
-    setManualContextId(null)
-  }
-}, [notes]) // re-run setiap kali list notes berubah (delete, reload)
+  // Reset manualContextId kalau note yang dipilih dihapus
+  useEffect(() => {
+    if (manualContextId === null) return
+    const stillExists = notes.some(n => Number(n.id) === manualContextId)
+    if (!stillExists) setManualContextId(null)
+  }, [notes, manualContextId])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -219,7 +211,6 @@ useEffect(() => {
               )}
             </button>
 
-            {/* Dropdown pilih catatan (hanya di chat bebas) */}
             {isFreeChat && showCtxPicker && (
               <div className="ctx-picker-dropdown">
                 <div className="ctx-picker-header">
@@ -274,7 +265,6 @@ useEffect(() => {
           <AIStatusBadge status={aiStatus} detail={aiStatusDetail} />
         </div>
 
-        {/* Bar konteks aktif */}
         {useContext && contextNote && (
           <div className="ctx-active-bar">
             <i className="ti ti-file-text" />
@@ -292,7 +282,6 @@ useEffect(() => {
           </div>
         )}
 
-        {/* Warning: konteks aktif tapi belum pilih catatan */}
         {useContext && isFreeChat && !manualContextId && (
           <div className="ctx-warn-bar">
             <i className="ti ti-alert-circle" />
@@ -343,10 +332,7 @@ function WelcomeScreen({ personaName, hasContext, noteTitle, webSearch, isFreeCh
       <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
         Halo! Aku {personaName}
       </div>
-      <div style={{
-        fontSize: 12.5, color: 'var(--text-dim)', textAlign: 'center',
-        maxWidth: 280, lineHeight: 1.65
-      }}>
+      <div style={{ fontSize: 12.5, color: 'var(--text-dim)', textAlign: 'center', maxWidth: 280, lineHeight: 1.65 }}>
         Tanya apa aja soal materi yang lagi kamu pelajari. Dokumen panjang akan dipecah otomatis.
       </div>
       {hasContext && noteTitle && (

@@ -1,18 +1,14 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect } from 'react'
 import { useStore } from './store/useStore'
 import Sidebar from './components/Sidebar/Sidebar'
 import Editor from './components/Editor/Editor'
 import Chat from './components/Chat/Chat'
 import Settings from './components/Settings/Settings'
 import Stats from './components/Stats/Stats'
-import ExportModal from './components/ExportImport/ExportModal'
-import ImportModal from './components/ExportImport/ImportModal'
 import './styles/app.css'
 
 export default function App() {
   const { currentView, loadNotes, loadSettings, loadStats } = useStore()
-  const [showExport, setShowExport] = useState(false)
-  const [showImport, setShowImport] = useState(false)
 
   useEffect(() => {
     Promise.all([loadNotes(), loadSettings(), loadStats()])
@@ -20,7 +16,7 @@ export default function App() {
 
   const renderMain = () => {
     switch (currentView) {
-      case 'notes':    return <EditorLayout onExport={() => setShowExport(true)} onImport={() => setShowImport(true)} />
+      case 'notes':    return <EditorLayout />
       case 'ai':       return <AIChatLayout />
       case 'stats':    return <Stats />
       case 'settings': return <Settings />
@@ -35,27 +31,22 @@ export default function App() {
           {renderMain()}
         </main>
       </div>
-      {showExport && <ExportModal onClose={() => setShowExport(false)} />}
-      {showImport && <ImportModal onClose={() => setShowImport(false)} />}
     </div>
   )
 }
 
-function EditorLayout({ onExport, onImport }: { onExport: () => void; onImport: () => void }) {
-  const { selectedNote, createNote } = useStore()
-  const [tab, setTab] = React.useState<'editor'|'chat'>('editor')
+function EditorLayout() {
+  const { selectedNote, createNote, importNote } = useStore()
+  const [tab, setTab] = React.useState<'editor' | 'chat'>('editor')
 
   return (
     <div className="editor-layout">
       <div className="editor-topbar">
-        <TabBtn icon="ti-edit"           label="Editor"  active={tab==='editor'} onClick={() => setTab('editor')} />
-        <TabBtn icon="ti-message-circle" label="Chat AI" active={tab==='chat'}   onClick={() => setTab('chat')} />
+        <TabBtn icon="ti-edit"           label="Editor"  active={tab === 'editor'} onClick={() => setTab('editor')} />
+        <TabBtn icon="ti-message-circle" label="Chat AI" active={tab === 'chat'}   onClick={() => setTab('chat')} />
         <div className="topbar-right">
-          <button className="topbar-btn" onClick={onImport}>
+          <button className="topbar-btn" onClick={importNote}>
             <i className="ti ti-upload" /> Import
-          </button>
-          <button className="topbar-btn" onClick={onExport}>
-            <i className="ti ti-download" /> Export
           </button>
           <button className="topbar-btn accent" onClick={() => createNote()}>
             <i className="ti ti-plus" /> Baru
@@ -80,10 +71,10 @@ function EditorLayout({ onExport, onImport }: { onExport: () => void; onImport: 
 
 function AIChatLayout() {
   return (
-    <div style={{display:'flex',flexDirection:'column',height:'100%',overflow:'hidden',minHeight:0}}>
-      <div className="editor-topbar" style={{paddingLeft:16}}>
-        <div style={{display:'flex',alignItems:'center',gap:8,fontSize:13,color:'var(--text-secondary)'}}>
-          <i className="ti ti-sparkles" style={{color:'var(--accent)'}} />
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', minHeight: 0 }}>
+      <div className="editor-topbar" style={{ paddingLeft: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+          <i className="ti ti-sparkles" style={{ color: 'var(--accent)' }} />
           Tanya AI — Chat Bebas
         </div>
       </div>
@@ -93,10 +84,10 @@ function AIChatLayout() {
 }
 
 function TabBtn({ icon, label, active, onClick }: {
-  icon: string; label: string; active: boolean; onClick: ()=>void
+  icon: string; label: string; active: boolean; onClick: () => void
 }) {
   return (
-    <button className={`topbar-tab ${active?'active':''}`} onClick={onClick}>
+    <button className={`topbar-tab ${active ? 'active' : ''}`} onClick={onClick}>
       <i className={`ti ${icon}`} /> {label}
     </button>
   )

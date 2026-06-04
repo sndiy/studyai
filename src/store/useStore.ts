@@ -1,17 +1,9 @@
-// src/store/useStore.ts — FASE 3 PATCH
-// [Bug #2]  doImport: hapus ketergantungan (getAll)[0], gunakan return value create langsung
-// [Bug #4]  sendMessage: filter array history agar strictly alternating sebelum buildSafeMessages
-// [Bug #7]  saveNote: update updated_at di state lokal dari return value notes:save
-// [Bug #13] sendMessage: set aiStatus='sending' SEBELUM operasi async pertama (mutex guard)
-// [Bug #14] importNote: state importProgress terpisah dari aiStatus
-
 import { create } from 'zustand'
 import type { Note, Settings, ChatMessage, Stats, View } from '../types'
 import { chunkText, selectRelevantChunks, formatChunksAsContext } from '../lib/chunker'
 import { streamAI, buildSafeMessages, type ProgressStatus } from '../lib/aiStream'
 
 export type AIStatus = 'idle' | 'chunking' | 'selecting' | 'sending' | 'streaming' | 'error'
-// [Bug #14] Status import terpisah agar tidak tumpuk dengan aiStatus streaming
 export type ImportProgress = 'idle' | 'reading' | 'saving' | 'error'
 
 interface StoreState {
@@ -20,33 +12,22 @@ interface StoreState {
 
   notes: Note[]
   selectedNote: Note | null
+  lastOpenedNote: Note | null
   loadNotes: () => Promise<void>
   selectNote: (note: Note | null) => void
   createNote: (data?: { title?: string; category?: string }) => Promise<void>
   saveNote: (id: string, title: string, content: string, category: string) => Promise<void>
+  saveNoteAs: (title: string, content: string, category: string, id: number) => Promise<void>
   deleteNote: (id: string) => Promise<void>
   importNote: () => Promise<void>
-  exportNote: (title: string, content: string) => Promise<void>
-
-  // [Bug #14] State import terpisah
   importProgress: ImportProgress
   importProgressDetail: string
-
-  // Bulk export/import
-  exportAllNotes: (format: 'json' | 'md_single' | 'md_folder' | 'txt') => Promise<void>
-  importBulkNotes: (format: 'json' | 'md' | 'txt') => Promise<void>
-  importPreview: Note[]
-  importMergeStrategy: 'skip' | 'overwrite' | 'keep_both'
-  setImportPreview: (notes: Note[]) => void
-  setImportMergeStrategy: (s: 'skip' | 'overwrite' | 'keep_both') => void
-  doImport: () => Promise<{ added: number; skipped: number; overwritten: number }>
 
   settings: Settings | null
   loadSettings: () => Promise<void>
   updateSetting: (key: string, value: string) => Promise<void>
 
   messages: ChatMessage[]
-  // [Bug #5 contract] loadHistory sekarang terima sessionId opsional untuk chat bebas
   loadHistory: (noteId: string | null, sessionId?: string | null) => Promise<void>
   sendMessage: (
     userText: string,
@@ -66,118 +47,117 @@ interface StoreState {
   stats: Stats | null
   streak: number
   loadStats: () => Promise<void>
-
-  searchQuery: string
-  setSearchQuery: (q: string) => void
-
-  exportStatus: string
-  importStatus: string
 }
 
-// ── Helper: pastikan array messages strictly alternating user/assistant ────────
-// Tidak destruktif — menghasilkan array baru, tidak mengubah input.
-// Aturan: harus dimulai dengan 'user', tidak boleh ada dua role sama berturut-turut.
-// Jika ada consecutive role sama → merge contentnya.
-// Jika dimulai dengan 'assistant' → drop sampai ketemu 'user' pertama.
 function toStrictlyAlternating(
   msgs: { role: string; content: string }[]
 ): { role: string; content: string }[] {
-  // Drop pesan awal yang bukan 'user'
   let start = 0
   while (start < msgs.length && msgs[start].role !== 'user') start++
   const trimmed = msgs.slice(start)
-
   if (trimmed.length === 0) return []
-
   const result: { role: string; content: string }[] = []
   for (const msg of trimmed) {
     const last = result[result.length - 1]
     if (last && last.role === msg.role) {
-      // Merge: role sama berturut-turut → gabung content
-      result[result.length - 1] = {
-        role: last.role,
-        content: last.content + '\n\n' + msg.content
-      }
+      result[result.length - 1] = { role: last.role, content: last.content + '\n\n' + msg.content }
     } else {
       result.push({ role: msg.role, content: msg.content })
     }
   }
-
-  // Pastikan diakhiri dengan 'user' — jika tidak, trim dari belakang
-  // (ini terjadi jika history sudah ada assistant reply, lalu user mengirim baru)
-  // Dalam konteks sendMessage, pesan terakhir PASTI 'user', tapi kita pastikan
-  // agar tidak ada asumsi tersirat.
-  // CATATAN: jangan .pop() — gunakan slice agar tidak destruktif
   let end = result.length
   while (end > 0 && result[end - 1].role !== 'user') end--
-
   return result.slice(0, end)
 }
 
 export const useStore = create<StoreState>((set, get) => ({
 
-  // ── View ──────────────────────────────────────────────────────────────────
+  // ── View ───────────────────────────────────────────────────────────────────
   currentView: 'notes',
   setView: (v) => set({ currentView: v }),
 
-  // ── Notes ─────────────────────────────────────────────────────────────────
+  // ── Notes ──────────────────────────────────────────────────────────────────
   notes: [],
   selectedNote: null,
+  lastOpenedNote: null,
+  openFilePaths: {} as Record<number, string>,
+  registerOpenPath: (noteId: number, filePath: string) => set(state => ({
+    openFilePaths: { ...state.openFilePaths, [noteId]: filePath }
+  })),
 
   loadNotes: async () => {
     const notes = await window.api.notes.getAll()
     set({ notes })
   },
 
-  selectNote: (note) => set({ selectedNote: note }),
+  selectNote: (note) => set({
+    selectedNote: note,
+    ...(note ? { lastOpenedNote: note } : {})
+  }),
 
   createNote: async (data = {}) => {
     const note = await window.api.notes.create(data)
     await get().loadNotes()
-    set({ selectedNote: note })
+    set({ selectedNote: note, lastOpenedNote: note })
   },
 
-  // [Bug #7] Gunakan updated_at dari return value notes:save untuk update state lokal
-  // Sehingga list sidebar langsung resort berdasarkan waktu edit terbaru tanpa reload penuh
   saveNote: async (id, title, content, category) => {
     const numId = Number(id)
     const res = await window.api.notes.save({ id: numId, title, content, category })
-    // res.updated_at tersedia dari Fase 1 patch (notes:save return { ok, updated_at })
-    const updatedAt: string = res?.updated_at ?? new Date().toISOString()
-
+    const updatedAt: string = (res as any)?.updated_at ?? new Date().toLocaleString('id-ID')
     set(state => {
       const updatedNotes = state.notes
-        .map(n =>
-          Number(n.id) === numId
-            ? { ...n, title, content, category, updated_at: updatedAt }
-            : n
+        .map(n => Number(n.id) === numId
+          ? { ...n, title, content, category, updated_at: updatedAt }
+          : n
         )
-        // Re-sort berdasarkan updated_at descending agar sidebar langsung benar
         .sort((a, b) =>
           new Date(b.updated_at ?? 0).getTime() - new Date(a.updated_at ?? 0).getTime()
         )
-
+      const updatedSelected = Number(state.selectedNote?.id) === numId
+        ? { ...state.selectedNote!, title, content, category, updated_at: updatedAt }
+        : state.selectedNote
       return {
         notes: updatedNotes,
-        selectedNote: Number(state.selectedNote?.id) === numId
-          ? { ...state.selectedNote!, title, content, category, updated_at: updatedAt }
-          : state.selectedNote
+        selectedNote: updatedSelected,
+        lastOpenedNote: Number(state.lastOpenedNote?.id) === numId
+          ? { ...state.lastOpenedNote!, title, content, category, updated_at: updatedAt }
+          : state.lastOpenedNote
       }
     })
   },
 
-  deleteNote: async (id) => {
-    await window.api.notes.delete(id)
-    const notes = await window.api.notes.getAll()
-    set({ notes, selectedNote: notes[0] ?? null })
+  saveNoteAs: async (title, content, category, id) => {
+    const { openFilePaths } = get()
+    const existingPath = openFilePaths[id]
+    if (existingPath) {
+      // Ada path → langsung save ke file tanpa dialog
+      const res = await window.api.file.save({ id, title, content, category })
+      if (res?.noPath) {
+        // Main process restart → path hilang, fallback ke dialog
+        await window.api.file.saveAs({ title, content, category, id })
+      }
+    } else {
+      // Belum ada path → buka dialog Save As
+      const res = await window.api.file.saveAs({ title, content, category, id })
+      // Kalau user pilih lokasi, register path-nya untuk save berikutnya
+      if (res?.ok && res.filePath) {
+        get().registerOpenPath(id, res.filePath)
+      }
+    }
   },
 
-  // [Bug #14] importNote — gunakan importProgress, bukan aiStatus
+  deleteNote: async (id) => {
+    await window.api.notes.delete(Number(id))
+    const notes = await window.api.notes.getAll()
+    const next = notes[0] ?? null
+    set({ notes, selectedNote: next, lastOpenedNote: next })
+  },
+
   importProgress: 'idle',
   importProgressDetail: '',
 
   importNote: async () => {
-    // Gunakan importProgress — tidak menyentuh aiStatus sama sekali
     set({ importProgress: 'reading', importProgressDetail: 'Membaca file...' })
     try {
       const result = await window.api.file.import()
@@ -188,135 +168,23 @@ export const useStore = create<StoreState>((set, get) => ({
       set({ importProgress: 'saving', importProgressDetail: 'Menyimpan ke database...' })
       const note = await window.api.notes.create({ title: result.title, category: 'Import' })
       await window.api.notes.save({
-        id: note.id,
-        title: result.title,
-        content: result.content,
-        category: 'Import'
+        id: note.id, title: result.title, content: result.content, category: 'Import'
       })
       await get().loadNotes()
       const updated = await window.api.notes.get(note.id)
-      set({ selectedNote: updated, importProgress: 'idle', importProgressDetail: '' })
+      // Register path agar Simpan File langsung tulis ke file yang sama
+      if (result.filePath) {
+        get().registerOpenPath(updated.id, result.filePath)
+        await window.api.file.registerPath(updated.id, result.filePath)
+      }
+      set({ selectedNote: updated, lastOpenedNote: updated, importProgress: 'idle', importProgressDetail: '' })
     } catch (e) {
       set({ importProgress: 'error', importProgressDetail: String(e) })
       setTimeout(() => set({ importProgress: 'idle', importProgressDetail: '' }), 3000)
     }
   },
 
-  exportNote: async (title, content) => {
-    await window.api.file.exportMd({ title, content })
-  },
-
-  // ── Bulk Export ────────────────────────────────────────────────────────────
-  exportStatus: '',
-  exportAllNotes: async (format) => {
-    const notes = get().notes
-    if (notes.length === 0) { set({ exportStatus: 'Tidak ada rangkuman untuk di-export.' }); return }
-    set({ exportStatus: 'Mengekspor...' })
-    try {
-      let res: any
-      const version = '2.0'
-      if (format === 'json')           res = await window.api.file.exportJson(notes, version)
-      else if (format === 'md_single') res = await window.api.file.exportMdSingle(notes)
-      else if (format === 'md_folder') res = await window.api.file.exportMdFolder(notes)
-      else if (format === 'txt')       res = await window.api.file.exportTxtBulk(notes)
-      if (res?.success) {
-        const msg = res.folder
-          ? `✓ ${res.count} file .md tersimpan di folder`
-          : `✓ ${res.count ?? notes.length} rangkuman berhasil di-export`
-        set({ exportStatus: msg })
-      } else {
-        set({ exportStatus: '✗ Export gagal' })
-      }
-    } catch (e) { set({ exportStatus: `✗ Error: ${e}` }) }
-    setTimeout(() => set({ exportStatus: '' }), 4000)
-  },
-
-  // ── Bulk Import ────────────────────────────────────────────────────────────
-  importPreview: [],
-  importMergeStrategy: 'skip',
-  importStatus: '',
-
-  setImportPreview: (notes) => set({ importPreview: notes }),
-  setImportMergeStrategy: (s) => set({ importMergeStrategy: s }),
-
-  importBulkNotes: async (format) => {
-    set({ importStatus: 'Membaca file...', importPreview: [] })
-    try {
-      let res: any
-      if (format === 'json')     res = await window.api.file.importJson()
-      else if (format === 'md')  res = await window.api.file.importMdFiles()
-      else if (format === 'txt') res = await window.api.file.importTxtFiles()
-      if (res?.notes?.length > 0) {
-        set({ importPreview: res.notes, importStatus: `${res.notes.length} rangkuman siap di-import` })
-      } else if (res?.error) {
-        set({ importStatus: `✗ ${res.error}` })
-      } else {
-        set({ importStatus: 'Tidak ada rangkuman ditemukan.' })
-      }
-    } catch (e) { set({ importStatus: `✗ Error: ${e}` }) }
-  },
-
-  // [Bug #2] doImport — hapus (getAll)[0], gunakan return value notes.create langsung
-  doImport: async () => {
-    const { importPreview, importMergeStrategy, notes } = get()
-    const existingTitles: Record<string, number> = {}
-    notes.forEach((n, i) => { existingTitles[n.title] = i })
-
-    let added = 0, skipped = 0, overwritten = 0
-
-    for (const n of importPreview) {
-      const title = n.title
-      if (existingTitles[title] !== undefined) {
-        if (importMergeStrategy === 'skip') {
-          skipped++
-          continue
-        }
-        if (importMergeStrategy === 'overwrite') {
-          const existing = notes[existingTitles[title]]
-          await window.api.notes.save({
-            id: existing.id,
-            title: n.title,
-            content: n.content,
-            category: n.category
-          })
-          overwritten++
-        } else {
-          // keep_both — [Bug #2] gunakan return value create, bukan (getAll)[0]
-          const created = await window.api.notes.create({
-            title: `${title} (import)`,
-            category: n.category
-          })
-          // created adalah objek Note lengkap dari DB (Fase 1: notes:create return SELECT)
-          await window.api.notes.save({
-            id: created.id,
-            title: `${title} (import)`,
-            content: n.content,
-            category: n.category
-          })
-          added++
-        }
-      } else {
-        // [Bug #2] path normal — sudah benar di kode lama, tapi tetap eksplisit
-        const created = await window.api.notes.create({
-          title: n.title,
-          category: n.category
-        })
-        await window.api.notes.save({
-          id: created.id,
-          title: n.title,
-          content: n.content,
-          category: n.category
-        })
-        added++
-      }
-    }
-
-    await get().loadNotes()
-    set({ importPreview: [], importStatus: '' })
-    return { added, skipped, overwritten }
-  },
-
-  // ── Settings ──────────────────────────────────────────────────────────────
+  // ── Settings ───────────────────────────────────────────────────────────────
   settings: null,
 
   loadSettings: async () => {
@@ -331,10 +199,9 @@ export const useStore = create<StoreState>((set, get) => ({
     }))
   },
 
-  // ── Chat ──────────────────────────────────────────────────────────────────
+  // ── Chat ───────────────────────────────────────────────────────────────────
   messages: [],
 
-  // [Bug #5 contract] loadHistory terima sessionId opsional
   loadHistory: async (noteId, sessionId = null) => {
     try {
       let raw: any[]
@@ -355,17 +222,12 @@ export const useStore = create<StoreState>((set, get) => ({
     }
   },
 
-  // [Bug #13] sendMessage — mutex guard: set aiStatus='sending' SEBELUM operasi async pertama
-  // [Bug #4]  toStrictlyAlternating dipanggil sebelum buildSafeMessages
   sendMessage: async (userText, noteId, useContext, useWebSearch = false, sessionId = null) => {
     const { settings, selectedNote, notes } = get()
     if (!settings || !userText.trim()) return
 
-    // [Bug #13] MUTEX: set status SEBELUM await apapun
-    // Cek dan set dalam satu operasi sinkron — tidak ada jendela race
     const currentStatus = get().aiStatus
     if (currentStatus === 'streaming' || currentStatus === 'sending') return
-    // Set 'sending' SEGERA — sebelum operasi async pertama apapun
     set({ aiStatus: 'sending', aiStatusDetail: 'Mempersiapkan...', streamingText: '' })
 
     try {
@@ -375,13 +237,8 @@ export const useStore = create<StoreState>((set, get) => ({
 
       const model = settings.active_model ?? 'gemini-2.5-flash'
 
-      // [Bug #12 - preview] Deteksi Claude di sini, error langsung sebelum lanjut
-      // (implementasi penuh di Fase 4, tapi guard awal ada di sini)
       if (model.startsWith('claude')) {
-        set({
-          aiStatus: 'error',
-          aiStatusDetail: 'Claude API streaming belum diimplementasikan. Ganti model ke Gemini atau GPT.'
-        })
+        set({ aiStatus: 'error', aiStatusDetail: 'Claude API belum diimplementasikan. Ganti model ke Gemini atau GPT.' })
         setTimeout(() => set({ aiStatus: 'idle', aiStatusDetail: '' }), 5000)
         return
       }
@@ -393,36 +250,20 @@ export const useStore = create<StoreState>((set, get) => ({
           : ''
 
       if (!apiKey) {
-        set({
-          aiStatus: 'error',
-          aiStatusDetail: 'API key belum dikonfigurasi. Pergi ke Pengaturan → Providers.'
-        })
+        set({ aiStatus: 'error', aiStatusDetail: 'API key belum dikonfigurasi. Pergi ke Pengaturan.' })
         setTimeout(() => set({ aiStatus: 'idle', aiStatusDetail: '' }), 4000)
         return
       }
 
-      // Snapshot history SEBELUM menambahkan pesan user baru ke state
-      const historySnapshot = get().messages.map(m => ({
-        role: m.role as string,
-        content: m.content
-      }))
+      const historySnapshot = get().messages.map(m => ({ role: m.role as string, content: m.content }))
 
-      // Simpan pesan user ke DB (fire-and-forget, tidak tunggu)
-      window.api.chat.save({
-        note_id: noteId || null,
-        role: 'user',
-        content: userText,
-        session_id: sessionId
-      })
+      window.api.chat.save({ note_id: noteId || null, role: 'user', content: userText, session_id: sessionId })
 
-      // Tambahkan pesan user ke UI state
       const userMsg: ChatMessage = { role: 'user', content: userText }
       set(state => ({ messages: [...state.messages, userMsg] }))
 
-      // Increment stats — handler nyata dari Fase 1+2
       window.api.stats.increment('chat_count')
 
-      // Build system prompt
       const maxTokens = parseInt(settings.max_tokens ?? '2048') || 2048
       const personaPrompt = settings.persona_prompt?.trim() ||
         'Kamu adalah Mai, asisten belajar yang cerdas dan supportif. Berbicara bahasa Indonesia dengan hangat dan fokus pada materi.'
@@ -446,18 +287,11 @@ export const useStore = create<StoreState>((set, get) => ({
         }
       }
 
-      if (useWebSearch) {
-        systemPrompt += '\n\nJika informasi di rangkuman TIDAK LENGKAP atau TIDAK ADA, gunakan pengetahuan terbaikmu berdasarkan data training. Selalu prioritaskan isi rangkuman pengguna sebagai sumber utama.'
-      }
-
-      // [Bug #4] Bangun rawHistory dari snapshot + pesan user baru,
-      // lalu enforce strictly alternating SEBELUM buildSafeMessages
       const rawHistory: { role: string; content: string }[] = [
         ...historySnapshot,
         { role: 'user', content: userText }
       ]
       const alternatingHistory = toStrictlyAlternating(rawHistory)
-
       const { safeMessages, trimmedCount, estimatedInputTokens } = buildSafeMessages(
         alternatingHistory, systemPrompt, maxTokens, model
       )
@@ -467,11 +301,7 @@ export const useStore = create<StoreState>((set, get) => ({
         : `~${estimatedInputTokens.toLocaleString()} token`
 
       const abortController = new AbortController()
-      set({
-        abortController,
-        aiStatus: 'sending',
-        aiStatusDetail: chunkInfo ? `${chunkInfo} · ${tokenInfo}` : tokenInfo,
-      })
+      set({ abortController, aiStatus: 'sending', aiStatusDetail: chunkInfo ? `${chunkInfo} · ${tokenInfo}` : tokenInfo })
 
       let accumulated = ''
 
@@ -486,17 +316,9 @@ export const useStore = create<StoreState>((set, get) => ({
       const onChunk = ({ text, done, error }: { text: string; done: boolean; error?: string }) => {
         if (error) {
           set({ aiStatus: 'error', aiStatusDetail: error, streamingText: '' })
-          const errMsg: ChatMessage = {
-            role: 'assistant',
-            content: `❌ **Error:** ${error}\n\nPastikan API key valid dan coba lagi.`
-          }
+          const errMsg: ChatMessage = { role: 'assistant', content: `❌ **Error:** ${error}\n\nPastikan API key valid dan coba lagi.` }
           set(state => ({ messages: [...state.messages, errMsg] }))
-          window.api.chat.save({
-            note_id: noteId || null,
-            role: 'assistant',
-            content: errMsg.content,
-            session_id: sessionId
-          })
+          window.api.chat.save({ note_id: noteId || null, role: 'assistant', content: errMsg.content, session_id: sessionId })
           setTimeout(() => set({ aiStatus: 'idle', aiStatusDetail: '' }), 5000)
           return
         }
@@ -506,18 +328,8 @@ export const useStore = create<StoreState>((set, get) => ({
         } else {
           if (accumulated) {
             const assistantMsg: ChatMessage = { role: 'assistant', content: accumulated }
-            set(state => ({
-              messages: [...state.messages, assistantMsg],
-              streamingText: '',
-              aiStatus: 'idle',
-              aiStatusDetail: ''
-            }))
-            window.api.chat.save({
-              note_id: noteId || null,
-              role: 'assistant',
-              content: accumulated,
-              session_id: sessionId
-            })
+            set(state => ({ messages: [...state.messages, assistantMsg], streamingText: '', aiStatus: 'idle', aiStatusDetail: '' }))
+            window.api.chat.save({ note_id: noteId || null, role: 'assistant', content: accumulated, session_id: sessionId })
           } else {
             set({ streamingText: '', aiStatus: 'idle', aiStatusDetail: '' })
           }
@@ -534,7 +346,6 @@ export const useStore = create<StoreState>((set, get) => ({
       })
 
     } finally {
-      // Pastikan status kembali idle jika ada yang terlewat
       const current = get().aiStatus
       if (current !== 'idle') {
         set({ aiStatus: 'idle', aiStatusDetail: '', streamingText: '', abortController: null })
@@ -542,26 +353,18 @@ export const useStore = create<StoreState>((set, get) => ({
     }
   },
 
-  // [Bug #3 contract] clearHistory teruskan sessionId ke preload
   clearHistory: async (noteId, sessionId = null) => {
     try {
-      const id = noteId ? String(noteId) : null
-      await window.api.chat.clearByNote(id, sessionId)
+      await window.api.chat.clearByNote(noteId ? String(noteId) : null as any, sessionId)
     } catch (e) {
       console.error('clearHistory error:', e)
     }
     const { abortController } = get()
     if (abortController) abortController.abort()
-    set({
-      messages: [],
-      streamingText: '',
-      aiStatus: 'idle',
-      aiStatusDetail: '',
-      abortController: null
-    })
+    set({ messages: [], streamingText: '', aiStatus: 'idle', aiStatusDetail: '', abortController: null })
   },
 
-  // ── Streaming state ────────────────────────────────────────────────────────
+  // ── Streaming ──────────────────────────────────────────────────────────────
   streamingText: '',
   aiStatus: 'idle',
   aiStatusDetail: '',
@@ -579,7 +382,6 @@ export const useStore = create<StoreState>((set, get) => ({
   stats: null,
   streak: 0,
 
-  // [Bug #9] loadStats — gunakan streak:get handler langsung, bukan settings.streak_count
   loadStats: async () => {
     try {
       const [statsData, notes, streakData] = await Promise.all([
@@ -587,34 +389,15 @@ export const useStore = create<StoreState>((set, get) => ({
         window.api.notes.getAll(),
         window.api.streak.get().catch(() => ({ count: 0 }))
       ])
-
       const catMap: Record<string, number> = {}
-      notes.forEach((n: Note) => {
-        const c = n.category || 'Umum'
-        catMap[c] = (catMap[c] || 0) + 1
-      })
-      const categories = Object.entries(catMap)
-        .map(([category, c]) => ({ category, c }))
-        .sort((a, b) => b.c - a.c)
-
-      const stats: Stats = {
-        totalNotes: notes.length,
-        todayChats: statsData?.todayChats ?? statsData?.chat_count ?? 0,
-        categories,
-        recentNotes: notes.slice(0, 5)
-      }
-
-      set({ stats, streak: streakData?.count ?? 0 })
-    } catch (e) {
-      console.error('loadStats error:', e)
+      notes.forEach((n: Note) => { const c = n.category || 'Umum'; catMap[c] = (catMap[c] || 0) + 1 })
+      const categories = Object.entries(catMap).map(([category, c]) => ({ category, c })).sort((a, b) => b.c - a.c)
       set({
-        stats: { totalNotes: 0, todayChats: 0, categories: [], recentNotes: [] },
-        streak: 0
+        stats: { totalNotes: notes.length, todayChats: (statsData as any)?.todayChats ?? 0, categories, recentNotes: notes.slice(0, 5) },
+        streak: (streakData as any)?.count ?? 0
       })
+    } catch (e) {
+      set({ stats: { totalNotes: 0, todayChats: 0, categories: [], recentNotes: [] }, streak: 0 })
     }
   },
-
-  // ── Search ─────────────────────────────────────────────────────────────────
-  searchQuery: '',
-  setSearchQuery: (q) => set({ searchQuery: q }),
 }))

@@ -69,7 +69,6 @@ function FloatingMenu({ editor }: { editor: any }) {
       let left = rect.left - containerRect.left + rect.width / 2 - menuWidth / 2
       let top  = rect.top - containerRect.top - menuHeight - 8
 
-      // Clamp agar tidak keluar area
       left = Math.max(4, Math.min(left, containerRect.width - menuWidth - 4))
       if (top < 4) top = rect.bottom - containerRect.top + 8
 
@@ -144,7 +143,7 @@ function FloatingMenu({ editor }: { editor: any }) {
 
 // ─── Main Editor ──────────────────────────────────────────────────────────────
 export default function Editor() {
-  const { selectedNote, notes, createNote, saveNote, deleteNote, importNote, exportNote } = useStore()
+  const { selectedNote, notes, createNote, saveNote, deleteNote, importNote, saveNoteAs } = useStore()
 
   const [title, setTitle]                     = useState('')
   const [category, setCategory]               = useState('Umum')
@@ -154,12 +153,12 @@ export default function Editor() {
   const [showColorPicker, setShowColorPicker] = useState(false)
   const [showHlPicker, setShowHlPicker]       = useState(false)
 
+  // [Fix] saveTimer cleanup on unmount mencegah memory leak
   const saveTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
   const colorRef   = useRef<HTMLDivElement>(null)
   const hlRef      = useRef<HTMLDivElement>(null)
   const catRef     = useRef<HTMLDivElement>(null)
 
-  // Gunakan ref untuk state agar Tiptap onUpdate tidak menggunakan closure lama
   const stateRef = useRef({ title, category, selectedNote })
   useEffect(() => {
     stateRef.current = { title, category, selectedNote }
@@ -179,6 +178,13 @@ export default function Editor() {
   useEffect(() => {
     scheduleSaveRef.current = scheduleSave
   }, [scheduleSave])
+
+  // [Fix] Cleanup saveTimer saat unmount — mencegah memory leak / setState setelah unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+    }
+  }, [])
 
   const isBindingRef = useRef(false)
 
@@ -205,11 +211,10 @@ export default function Editor() {
     },
   })
 
-  // ─── FIX: Load note ke editor dengan clearContent dulu ──────────────────────
+  // Load note ke editor saat selectedNote berubah
   useEffect(() => {
     if (!selectedNote || !editor) return
 
-    // Reset UI state dulu sebelum load konten baru
     setTitle(selectedNote.title)
     setCategory(selectedNote.category)
     setSaved(true)
@@ -219,20 +224,27 @@ export default function Editor() {
     const isHTML = /<[a-z][\s\S]*>/i.test(raw)
 
     isBindingRef.current = true
-
-    // PERBAIKAN: clearContent dulu, baru setContent
-    // Ini mencegah Tiptap "merge" node list dari konten lama dengan konten baru
     editor.chain()
       .clearContent(false)
       .setContent(isHTML ? raw : marked.parse(raw) as string, false)
       .run()
 
-    // Naikkan timeout sedikit untuk safety agar proses setContent selesai dulu
-    setTimeout(() => {
-      isBindingRef.current = false
-    }, 100)
+    setTimeout(() => { isBindingRef.current = false }, 100)
   }, [selectedNote?.id, editor])
-  // ──────────────────────────────────────────────────────────────────────────
+
+  // Ctrl+S → Simpan file
+  useEffect(() => {
+    const handleCtrlS = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault()
+        if (!editor || !selectedNote) return
+        const md = turndown.turndown(editor.getHTML())
+        saveNoteAs(title, md, category, selectedNote.id)
+      }
+    }
+    window.addEventListener('keydown', handleCtrlS)
+    return () => window.removeEventListener('keydown', handleCtrlS)
+  }, [editor, selectedNote, title, category, saveNoteAs])
 
   // Tutup picker saat klik luar
   useEffect(() => {
@@ -267,14 +279,6 @@ export default function Editor() {
       <div className="empty-sub">Klik rangkuman di sidebar untuk mulai edit</div>
     </div>
   )
-
-  const handleManualSave = () => {
-    if (!editor) return
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    const md = turndown.turndown(editor.getHTML())
-    saveNote(String(selectedNote.id), title, md, category)
-    setSaved(true)
-  }
 
   return (
     <div className="editor-area">
@@ -333,7 +337,6 @@ export default function Editor() {
       {/* Toolbar */}
       {editor && (
         <div className="toolbar toolbar-wysiwyg">
-          {/* Undo / Redo */}
           <TBtn icon="ti-arrow-back-up"    tip="Undo" shortcut="Ctrl+Z"
             disabled={!editor.can().undo()} onClick={() => editor.chain().focus().undo().run()} />
           <TBtn icon="ti-arrow-forward-up" tip="Redo" shortcut="Ctrl+Y"
@@ -341,7 +344,6 @@ export default function Editor() {
 
           <div className="tb-sep" />
 
-          {/* Heading */}
           <select className="tb-select"
             value={
               editor.isActive('heading', { level:1 }) ? '1' :
@@ -361,36 +363,31 @@ export default function Editor() {
 
           <div className="tb-sep" />
 
-          {/* Format */}
-          <TBtn icon="ti-bold"          tip="Bold"        shortcut="Ctrl+B" active={editor.isActive('bold')}      onClick={() => editor.chain().focus().toggleBold().run()} />
-          <TBtn icon="ti-italic"        tip="Italic"      shortcut="Ctrl+I" active={editor.isActive('italic')}    onClick={() => editor.chain().focus().toggleItalic().run()} />
-          <TBtn icon="ti-underline"     tip="Underline"   shortcut="Ctrl+U" active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()} />
-          <TBtn icon="ti-strikethrough" tip="Strikethrough"                 active={editor.isActive('strike')}    onClick={() => editor.chain().focus().toggleStrike().run()} />
+          <TBtn icon="ti-bold"          tip="Bold"          shortcut="Ctrl+B" active={editor.isActive('bold')}      onClick={() => editor.chain().focus().toggleBold().run()} />
+          <TBtn icon="ti-italic"        tip="Italic"        shortcut="Ctrl+I" active={editor.isActive('italic')}    onClick={() => editor.chain().focus().toggleItalic().run()} />
+          <TBtn icon="ti-underline"     tip="Underline"     shortcut="Ctrl+U" active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()} />
+          <TBtn icon="ti-strikethrough" tip="Strikethrough"                   active={editor.isActive('strike')}    onClick={() => editor.chain().focus().toggleStrike().run()} />
 
           <div className="tb-sep" />
 
-          {/* Alignment */}
-          <TBtn icon="ti-align-left"       tip="Rata Kiri"  shortcut="Ctrl+Shift+L" active={editor.isActive({ textAlign:'left' })}    onClick={() => editor.chain().focus().setTextAlign('left').run()} />
-          <TBtn icon="ti-align-center"     tip="Tengah"     shortcut="Ctrl+Shift+E" active={editor.isActive({ textAlign:'center' })}   onClick={() => editor.chain().focus().setTextAlign('center').run()} />
-          <TBtn icon="ti-align-right"      tip="Rata Kanan" shortcut="Ctrl+Shift+R" active={editor.isActive({ textAlign:'right' })}    onClick={() => editor.chain().focus().setTextAlign('right').run()} />
-          <TBtn icon="ti-align-justified"  tip="Justify"    shortcut="Ctrl+Shift+J" active={editor.isActive({ textAlign:'justify' })}  onClick={() => editor.chain().focus().setTextAlign('justify').run()} />
+          <TBtn icon="ti-align-left"      tip="Rata Kiri"  shortcut="Ctrl+Shift+L" active={editor.isActive({ textAlign:'left' })}    onClick={() => editor.chain().focus().setTextAlign('left').run()} />
+          <TBtn icon="ti-align-center"    tip="Tengah"     shortcut="Ctrl+Shift+E" active={editor.isActive({ textAlign:'center' })}   onClick={() => editor.chain().focus().setTextAlign('center').run()} />
+          <TBtn icon="ti-align-right"     tip="Rata Kanan" shortcut="Ctrl+Shift+R" active={editor.isActive({ textAlign:'right' })}    onClick={() => editor.chain().focus().setTextAlign('right').run()} />
+          <TBtn icon="ti-align-justified" tip="Justify"    shortcut="Ctrl+Shift+J" active={editor.isActive({ textAlign:'justify' })}  onClick={() => editor.chain().focus().setTextAlign('justify').run()} />
 
           <div className="tb-sep" />
 
-          {/* Lists */}
-          <TBtn icon="ti-list"         tip="Bullet List"   active={editor.isActive('bulletList')}  onClick={() => editor.chain().focus().toggleBulletList().run()} />
-          <TBtn icon="ti-list-numbers" tip="Ordered List"  active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()} />
+          <TBtn icon="ti-list"         tip="Bullet List"  active={editor.isActive('bulletList')}  onClick={() => editor.chain().focus().toggleBulletList().run()} />
+          <TBtn icon="ti-list-numbers" tip="Ordered List" active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()} />
 
           <div className="tb-sep" />
 
-          {/* Quote & Code */}
           <TBtn icon="ti-quote"     tip="Blockquote" active={editor.isActive('blockquote')} onClick={() => editor.chain().focus().toggleBlockquote().run()} />
           <TBtn icon="ti-code"      tip="Inline Code" shortcut="Ctrl+E" active={editor.isActive('code')}      onClick={() => editor.chain().focus().toggleCode().run()} />
           <TBtn icon="ti-code-dots" tip="Code Block"  active={editor.isActive('codeBlock')} onClick={() => editor.chain().focus().toggleCodeBlock().run()} />
 
           <div className="tb-sep" />
 
-          {/* Color */}
           <div className="tb-color-wrap" ref={colorRef}>
             <button className="tb-btn" title="Warna Teks"
               onMouseDown={e => { e.preventDefault(); setShowColorPicker(v => !v); setShowHlPicker(false) }}>
@@ -409,7 +406,6 @@ export default function Editor() {
             )}
           </div>
 
-          {/* Highlight */}
           <div className="tb-color-wrap" ref={hlRef}>
             <button className="tb-btn" title="Highlight"
               onMouseDown={e => { e.preventDefault(); setShowHlPicker(v => !v); setShowColorPicker(false) }}>
@@ -445,14 +441,11 @@ export default function Editor() {
 
       {/* Footer */}
       <div className="editor-footer">
-        <button className="btn-primary" onClick={handleManualSave}>
+        <button
+          className="btn-save-file"
+          onClick={() => editor && selectedNote && saveNoteAs(title, turndown.turndown(editor.getHTML()), category, selectedNote.id)}
+        >
           <i className="ti ti-device-floppy" /> Simpan
-        </button>
-        <button className="btn-secondary" onClick={importNote}>
-          <i className="ti ti-upload" /> Import
-        </button>
-        <button className="btn-secondary" onClick={() => exportNote(title, turndown.turndown(editor?.getHTML() ?? ''))}>
-          <i className="ti ti-download" /> Export MD
         </button>
         {confirmDelete ? (
           <>

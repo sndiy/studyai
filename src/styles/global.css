@@ -64,3 +64,14 @@ input, textarea { font-family: var(--font); outline: none; border: none; }
 }
 .btn-primary:hover  { background: #6a58e8; }
 .btn-secondary:hover { background: var(--bg-overlay); color: var(--text-secondary); }
+.btn-save-file {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 18px;
+  background: #9b8dff;
+  border: none; border-radius: var(--radius-md);
+  font-size: 12.5px; font-weight: 600; color: #fff;
+  cursor: pointer; transition: background 0.15s, box-shadow 0.15s;
+  box-shadow: 0 0 12px #9b8dff55;
+}
+.btn-save-file:hover { background: #b3a6ff; box-shadow: 0 0 18px #9b8dff88; }
+.btn-save-file:active { background: #7c6af7; }

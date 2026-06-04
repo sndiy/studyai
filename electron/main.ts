@@ -53,6 +53,9 @@ function initDB() {
 
 let win: BrowserWindow
 
+// Track file path per note id — { noteId: filePath }
+const openFilePaths = new Map<number, string>()
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1280, height: 760, minWidth: 900, minHeight: 600,
@@ -98,7 +101,7 @@ ipcMain.handle('notes:save', (_e, note: { id: string | number; title: string; co
   const now = new Date().toLocaleString('id-ID')
   db.prepare(`UPDATE notes SET title=?,content=?,category=?,updated_at=? WHERE id=?`)
     .run(note.title, note.content, note.category, now, note.id)
-  return { ok: true }
+  return { ok: true, updated_at: now }
 })
 
 ipcMain.handle('notes:delete', (_e, id: number) => {
@@ -186,14 +189,91 @@ ipcMain.handle('file:import', async () => {
       text = result.text
     }
   } catch(e) { return null }
-  const name = filePath.split(/[\\/]/).pop()?.replace(/\.[^.]+$/,'') ?? 'Import'
-  return { title: name, content: text }
+  const name = filePath.split(/[\\\/]/).pop()?.replace(/\.[^.]+$/,'') ?? 'Import'
+
+  // Strip header meta dari format export lama: "# Judul\n\n**Kategori:**...\n\n---\n\ncontent"
+  // Bersihkan agar tidak double-render saat di-load ke editor
+  let cleanContent = text.trim()
+  if (ext === 'md' || ext === 'txt') {
+    // Hapus baris pertama jika "# Judul" (heading H1)
+    cleanContent = cleanContent.replace(/^#[^\n]*\n+/, '')
+    // Hapus baris "**Kategori:** ..." dan "**Dibuat:**..." dst
+    cleanContent = cleanContent.replace(/^\*\*(?:Kategori|Dibuat|Update):\*\*[^\n]*\n*/gm, '')
+    // Hapus separator "---" di awal
+    cleanContent = cleanContent.replace(/^---\n+/, '')
+    cleanContent = cleanContent.trim()
+  }
+
+  return { title: name, content: cleanContent, filePath }
 })
 
+// Register path setelah import berhasil membuat note baru
+ipcMain.handle('file:registerPath', (_e, noteId: number, filePath: string) => {
+  if (noteId && filePath) openFilePaths.set(noteId, filePath)
+  return { ok: true }
+})
+
+// ── file:save — langsung tulis ke path yang sudah ditrack (dari import)
+// ── file:saveAs — buka dialog Save As (pertama kali / note baru)
+ipcMain.handle('file:save', async (_e, note: { id: number; title: string; content: string; category?: string }) => {
+  const existingPath = openFilePaths.get(note.id)
+  if (!existingPath) return { ok: false, noPath: true }  // renderer fallback ke saveAs
+  try {
+    const ext = existingPath.split('.').pop()?.toLowerCase()
+    if (ext === 'json') {
+      const payload = { version: '2.0', exported_at: new Date().toLocaleString('id-ID'), note }
+      writeFileSync(existingPath, JSON.stringify(payload, null, 2), 'utf-8')
+    } else {
+      writeFileSync(existingPath, note.content, 'utf-8')
+    }
+    return { ok: true, filePath: existingPath }
+  } catch(e: any) {
+    return { ok: false, error: e.message }
+  }
+})
+
+ipcMain.handle('file:saveAs', async (_e, note: { title: string; content: string; category?: string; id?: number }) => {
+  const res = await dialog.showSaveDialog(win, {
+    title: 'Simpan Rangkuman',
+    defaultPath: note.title + '.md',
+    filters: [
+      { name: 'Markdown (.md)',  extensions: ['md']   },
+      { name: 'JSON (.json)',    extensions: ['json']  },
+      { name: 'Plain Text (.txt)', extensions: ['txt'] },
+    ]
+  })
+  if (res.canceled || !res.filePath) return { ok: false, canceled: true }
+
+  const filePath = res.filePath
+  const ext = filePath.split('.').pop()?.toLowerCase()
+
+  try {
+    if (ext === 'json') {
+      const payload = { version: '2.0', exported_at: new Date().toLocaleString('id-ID'), note }
+      writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf-8')
+    } else if (ext === 'txt') {
+      const out = `${note.title}\n${'='.repeat(note.title.length)}\nKategori: ${note.category ?? 'Umum'}\n\n${note.content}`
+      writeFileSync(filePath, out, 'utf-8')
+    } else {
+      writeFileSync(filePath, note.content, 'utf-8')
+    }
+    // Simpan path untuk save langsung berikutnya
+    if (note.id != null) openFilePaths.set(note.id, filePath)
+    return { ok: true, filePath }
+  } catch(e: any) {
+    return { ok: false, error: e.message }
+  }
+})
+
+// legacy — tetap ada agar tidak break komponen lain
 ipcMain.handle('file:export', async (_e, title: string, content: string) => {
   const res = await dialog.showSaveDialog(win, {
-    defaultPath: title + '.txt',
-    filters: [{ name: 'Text', extensions: ['txt','md'] }]
+    defaultPath: title + '.md',
+    filters: [
+      { name: 'Markdown (.md)',    extensions: ['md']   },
+      { name: 'JSON (.json)',      extensions: ['json']  },
+      { name: 'Plain Text (.txt)', extensions: ['txt']  },
+    ]
   })
   if (res.canceled || !res.filePath) return null
   writeFileSync(res.filePath, content, 'utf-8')
@@ -207,7 +287,7 @@ ipcMain.handle('ai:validateKey', async (_e, provider: string, key: string) => {
     if (provider === 'gemini') {
       const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`
       const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 8000) // 8 second timeout
+      const timeout = setTimeout(() => controller.abort(), 8000)
       try {
         const r = await fetch(url, { signal: controller.signal })
         clearTimeout(timeout)

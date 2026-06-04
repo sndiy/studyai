@@ -1,6 +1,6 @@
 import React from 'react'
 import { useStore } from '../../store/useStore'
-import type { Note, View } from '../../types'
+import type { View } from '../../types'
 import './Sidebar.css'
 
 function timeAgo(dateStr: string): string {
@@ -17,24 +17,23 @@ function timeAgo(dateStr: string): string {
 
 export default function Sidebar() {
   const {
-    notes, selectedNote, selectNote, createNote, currentView, setView,
-    searchQuery, setSearchQuery, settings, streak
+    notes, selectedNote, selectNote, createNote,
+    currentView, setView, settings, streak,
+    lastOpenedNote,
   } = useStore()
-
-  const filtered = notes.filter(n =>
-    !searchQuery || n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    n.category.toLowerCase().includes(searchQuery.toLowerCase())
-  )
 
   const navItems: { id: View; icon: string; label: string }[] = [
     { id: 'notes',    icon: 'ti-books',       label: 'Semua Rangkuman' },
-    { id: 'ai',       icon: 'ti-sparkles',     label: 'Tanya AI' },
-    { id: 'stats',    icon: 'ti-chart-line',   label: 'Statistik' },
-    { id: 'settings', icon: 'ti-settings',     label: 'Pengaturan' },
+    { id: 'ai',       icon: 'ti-sparkles',     label: 'Tanya AI'        },
+    { id: 'stats',    icon: 'ti-chart-line',   label: 'Statistik'       },
+    { id: 'settings', icon: 'ti-settings',     label: 'Pengaturan'      },
   ]
 
   const activeModel = settings?.active_model ?? 'gemini-2.5-flash'
   const hasKey = !!(settings?.gemini_api_key || settings?.openai_api_key)
+
+  // Note yang ditampilkan di preview: selectedNote jika ada, fallback ke lastOpenedNote
+  const previewNote = selectedNote ?? lastOpenedNote
 
   return (
     <aside className="sidebar">
@@ -42,23 +41,11 @@ export default function Sidebar() {
         <div className="logo-row">
           <div className="logo-icon">📚</div>
           <span className="logo-text">StudyAI</span>
-          <span className="logo-ver">v1.1.1</span>
-        </div>
-        <div className="search-box">
-          <i className="ti ti-search" />
-          <input
-            placeholder="Cari rangkuman..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="search-clear">
-              <i className="ti ti-x" />
-            </button>
-          )}
+          <span className="logo-ver">v1.2.0</span>
         </div>
       </div>
 
+      {/* Navigasi */}
       <div className="nav-section">
         <div className="nav-label">Navigasi</div>
         {navItems.map(item => (
@@ -74,31 +61,42 @@ export default function Sidebar() {
         ))}
       </div>
 
-      <div className="note-list">
-        {filtered.length === 0 && (
-          <div className="note-empty">
-            <i className={`ti ${searchQuery ? 'ti-search-off' : 'ti-notebook-off'}`} />
-            {searchQuery ? 'Tidak ada hasil' : 'Belum ada rangkuman'}
-          </div>
-        )}
-        {filtered.map((note: Note) => (
+      {/* Preview rangkuman terbaru dibuka */}
+      <div className="last-opened-section">
+        <div className="nav-label">Terakhir Dibuka</div>
+
+        {previewNote ? (
           <div
-            key={note.id}
-            className={`note-card ${selectedNote?.id === note.id ? 'active' : ''}`}
-            onClick={() => { selectNote(note); setView('notes') }}
+            className={`note-card ${selectedNote?.id === previewNote.id ? 'active' : ''}`}
+            onClick={() => { selectNote(previewNote); setView('notes') }}
           >
             <div className="note-card-title">
               <i className="ti ti-file-text" />
-              {note.title}
+              <span className="note-card-title-text">{previewNote.title}</span>
             </div>
             <div className="note-card-meta">
-              <span className="note-cat"><i className="ti ti-tag" />{note.category}</span>
+              <span className="note-cat"><i className="ti ti-tag" />{previewNote.category}</span>
               <span>·</span>
               <i className="ti ti-clock" />
-              <span>{timeAgo(note.updated_at)}</span>
+              <span>{timeAgo(previewNote.updated_at)}</span>
+            </div>
+            <div className="note-card-preview">
+              {previewNote.content
+                ? previewNote.content.replace(/[#*`>\-_\[\]]/g, '').slice(0, 80).trim() + (previewNote.content.length > 80 ? '…' : '')
+                : <span className="note-card-empty">Belum ada isi</span>
+              }
             </div>
           </div>
-        ))}
+        ) : (
+          <div className="note-empty">
+            <i className="ti ti-notebook-off" />
+            Belum ada rangkuman dibuka
+          </div>
+        )}
+
+        <button className="sidebar-new-btn" onClick={() => { createNote(); setView('notes') }}>
+          <i className="ti ti-plus" /> Rangkuman Baru
+        </button>
       </div>
 
       <div className="sidebar-footer">
