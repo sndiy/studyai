@@ -39,7 +39,7 @@ export default function Sidebar() {
         <div className="logo-row">
           <div className="logo-icon">📚</div>
           <span className="logo-text">StudyAI</span>
-          <span className="logo-ver">v1.2</span>
+          <span className="logo-ver">v2.0</span>
         </div>
       </div>
 

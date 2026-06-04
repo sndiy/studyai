@@ -7,11 +7,20 @@ import Settings from './components/Settings/Settings'
 import './styles/app.css'
 
 export default function App() {
-  const { currentView, loadSettings, loadRecent } = useStore()
+  const { currentView, loadSettings, loadRecent, settings } = useStore()
 
   useEffect(() => {
     Promise.all([loadSettings(), loadRecent()])
   }, [])
+
+  useEffect(() => {
+    const theme = settings?.theme === 'light' ? 'light-theme' : ''
+    if (theme) {
+      document.body.classList.add(theme)
+    } else {
+      document.body.classList.remove('light-theme')
+    }
+  }, [settings?.theme])
 
   return (
     <div className="app-shell">

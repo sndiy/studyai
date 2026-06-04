@@ -87,7 +87,7 @@
 .ctx-badge {
   display: inline-flex; align-items: center; gap: 6px;
   margin-top: 10px; padding: 5px 13px;
-  background: var(--accent-bg); border: 0.5px solid #3a3060;
+  background: var(--accent-bg); border: 0.5px solid var(--accent-border);
   border-radius: 20px; font-size: 11.5px; color: var(--accent-soft);
 }
 
@@ -128,8 +128,8 @@
 }
 
 .ai-avatar {
-  background: linear-gradient(135deg, #2d1f4e, #1a1a3a);
-  border: 0.5px solid #3a3060;
+  background: var(--bg-overlay);
+  border: 0.5px solid var(--accent-border);
 }
 
 .ai-avatar.streaming {
@@ -142,8 +142,8 @@
 }
 
 .user-avatar {
-  background: var(--bg-elevated); border: 0.5px solid var(--border-sub);
-  color: var(--text-dim);
+  background: var(--bg-overlay); border: 0.5px solid var(--border-sub);
+  color: var(--text-muted);
 }
 .user-avatar .ti { font-size: 13px; }
 
@@ -177,7 +177,7 @@
 
 .bubble.user {
   background: var(--accent-bg);
-  border: 0.5px solid #3a3060;
+  border: 0.5px solid var(--accent-border);
   color: var(--text-secondary);
   border-top-right-radius: 4px;
 }
@@ -225,7 +225,7 @@
 .md-preview code {
   background: var(--bg-overlay); border: 0.5px solid var(--border-sub);
   border-radius: 4px; padding: 1px 5px;
-  font-family: var(--font-mono); font-size: 12px; color: #e0956a;
+  font-family: var(--font-mono); font-size: 12px; color: var(--code);
 }
 .md-preview pre {
   background: var(--bg-base); border: 0.5px solid var(--border);
@@ -264,7 +264,7 @@
 .pill-btn .ti { font-size: 12px; }
 .pill-btn:hover { background: var(--bg-overlay); color: var(--text-muted); }
 .pill-btn.on {
-  background: var(--accent-bg); border-color: #3a3060; color: var(--accent-soft);
+  background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent-soft);
 }
 .pill-btn.on .ti { color: var(--accent); }
 .pill-btn.on-web {
@@ -277,7 +277,7 @@
   padding: 3px 9px; border-radius: 20px; font-size: 11px; margin-left: auto;
 }
 .status-pill.proc {
-  background: var(--accent-bg); border: 0.5px solid #3a3060; color: var(--accent-soft);
+  background: var(--accent-bg); border: 0.5px solid var(--accent-border); color: var(--accent-soft);
 }
 .status-pill.err {
   background: rgba(255,90,90,0.1); border: 0.5px solid rgba(255,90,90,0.3); color: #ff6b6b;
@@ -294,7 +294,7 @@
   to   { opacity:1; transform: translateY(0); }
 }
 .ctx-bar.active {
-  background: var(--accent-bg); border: 0.5px solid #3a3060; color: var(--accent-soft);
+  background: var(--accent-bg); border: 0.5px solid var(--accent-border); color: var(--accent-soft);
 }
 .ctx-bar.active .ti { color: var(--accent); }
 .ctx-bar.warn {

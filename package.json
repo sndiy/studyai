@@ -1,6 +1,6 @@
 {
   "name": "studyai",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "description": "StudyAI \u2014 Desktop Study Assistant with AI",
   "main": "out/main/index.js",
   "scripts": {

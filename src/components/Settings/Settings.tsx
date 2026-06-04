@@ -27,6 +27,7 @@ const OPENAI_MODELS = ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo']
 
 export default function Settings() {
   const { settings, updateSetting } = useStore()
+  const [theme,        setTheme]        = useState(settings?.theme ?? 'dark')
   const [geminiKey,     setGeminiKey]     = useState(settings?.gemini_api_key ?? '')
   const [maxTokens,     setMaxTokens]     = useState(settings?.max_tokens ?? '2048')
   const [openaiKey,     setOpenaiKey]     = useState(settings?.openai_api_key ?? '')
@@ -43,10 +44,19 @@ export default function Settings() {
   const activeModel = settings?.active_model ?? ''
 
   useEffect(() => {
+    if (settings?.theme) setTheme(settings.theme)
+  }, [settings?.theme])
+
+  useEffect(() => {
     if (settings?.gemini_api_key && detectedModels.length === 0) {
       fetchGeminiModels(settings.gemini_api_key)
     }
   }, [settings?.gemini_api_key])
+
+  const handleThemeChange = async (newTheme: 'light' | 'dark') => {
+    setTheme(newTheme)
+    await updateSetting('theme', newTheme)
+  }
 
   const filterModels = (models: string[]) =>
     models
@@ -117,6 +127,27 @@ export default function Settings() {
 
   return (
     <div className="settings-panel">
+      {/* Tampilan */}
+      <div className="settings-section">
+        <div className="settings-section-title">
+          <i className="ti ti-palette" /> Tampilan
+        </div>
+        <div className="theme-toggle-row">
+          <button 
+            className={`theme-btn ${theme === 'light' ? 'active' : ''}`}
+            onClick={() => handleThemeChange('light')}
+          >
+            <i className="ti ti-sun" /> Terang
+          </button>
+          <button 
+            className={`theme-btn ${theme === 'dark' ? 'active' : ''}`}
+            onClick={() => handleThemeChange('dark')}
+          >
+            <i className="ti ti-moon" /> Gelap
+          </button>
+        </div>
+      </div>
+
       <div className="settings-section">
         <div className="settings-section-title">
           <i className="ti ti-cpu" /> AI Providers

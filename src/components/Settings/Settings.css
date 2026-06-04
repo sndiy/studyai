@@ -7,6 +7,24 @@
 }
 .settings-section-title .ti { font-size: 13px; }
 
+.theme-toggle-row {
+  display: flex; gap: 8px;
+  background: var(--bg-elevated); border: 0.5px solid var(--border-sub);
+  padding: 4px; border-radius: 10px; width: fit-content;
+}
+.theme-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 7px;
+  font-size: 12px; font-weight: 500; color: var(--text-muted);
+  background: none; border: none; cursor: pointer; transition: all 0.15s;
+}
+.theme-btn:hover { color: var(--text-secondary); }
+.theme-btn.active {
+  background: var(--bg-surface); color: var(--accent);
+  box-shadow: var(--shadow);
+}
+.theme-btn .ti { font-size: 14px; }
+
 .provider-card {
   background: var(--bg-elevated); border: 0.5px solid var(--border-sub);
   border-radius: 10px; overflow: hidden; margin-bottom: 8px;
@@ -21,9 +39,9 @@
   display: flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 500; flex-shrink: 0;
 }
-.plogo-gemini { background: #1a1830; color: var(--accent-soft); }
-.plogo-gpt    { background: #0f1a14; color: var(--green); }
-.plogo-claude { background: #1a1818; color: #e0956a; }
+.plogo-gemini { background: var(--accent-bg); color: var(--accent); }
+.plogo-gpt    { background: var(--green-bg); color: var(--green); }
+.plogo-claude { background: var(--bg-overlay); color: #e0956a; }
 .provider-info { flex: 1; }
 .provider-pname  { font-size: 12.5px; font-weight: 500; color: var(--text-secondary); }
 .provider-status {
@@ -69,7 +87,7 @@
 }
 .model-select:focus { border-color: var(--accent); outline: none; }
 .model-select option, .model-select optgroup {
-  background: #1a1a2e; color: var(--text-secondary);
+  background: var(--bg-elevated); color: var(--text-secondary);
 }
 
 /* Badge */
@@ -111,8 +129,8 @@
 .persona-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .persona-big-avatar {
   width: 40px; height: 40px; border-radius: 50%;
-  background: linear-gradient(135deg, #1a1830, #1a2a1a);
-  border: 0.5px solid #3a3060;
+  background: var(--bg-overlay);
+  border: 0.5px solid var(--border-sub);
   display: flex; align-items: center; justify-content: center; font-size: 18px;
 }
 .custom-prompt-area {

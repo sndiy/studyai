@@ -69,7 +69,7 @@
   cursor: pointer; transition: all 0.15s;
 }
 .note-card:hover { border-color: var(--border-sub); background: var(--bg-overlay); }
-.note-card.active { border-color: var(--accent); background: #1a1830; }
+.note-card.active { border-color: var(--accent); background: var(--accent-bg); }
 
 .note-card-title {
   display: flex; align-items: center; gap: 5px;

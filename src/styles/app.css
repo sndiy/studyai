@@ -34,7 +34,7 @@
 /* ── Topbar ──────────────────────────────────────────────────────────────── */
 .editor-topbar {
   display: flex; align-items: center;
-  border-bottom: 0.5px solid var(--border); background: #0f0f18;
+  border-bottom: 0.5px solid var(--border); background: var(--bg-surface);
   flex-shrink: 0; -webkit-app-region: no-drag;
 }
 
@@ -45,8 +45,8 @@
   -webkit-app-region: no-drag; cursor: pointer;
 }
 .topbar-tab .ti { font-size: 14px; }
-.topbar-tab:hover:not(.active) { color: var(--text-secondary); background: rgba(255,255,255,0.03); }
-.topbar-tab.active { color: var(--accent-soft); border-bottom-color: var(--accent); }
+.topbar-tab:hover:not(.active) { color: var(--text-secondary); background: var(--bg-overlay); }
+.topbar-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
 .topbar-right {
   margin-left: auto; display: flex; align-items: center; gap: 6px;
@@ -60,8 +60,8 @@
   transition: all 0.15s; white-space: nowrap; -webkit-app-region: no-drag;
 }
 .topbar-btn:hover     { background: var(--bg-overlay); color: var(--text-primary); border-color: var(--border); }
-.topbar-btn.accent    { background: var(--accent-bg); border-color: #3a3060; color: var(--accent-soft); }
-.topbar-btn.accent:hover { background: #2a2050; color: var(--accent); }
+.topbar-btn.accent    { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent-soft); }
+.topbar-btn.accent:hover { background: var(--bg-overlay); color: var(--accent); }
 .topbar-btn .ti { font-size: 13px; }
 
 .spin { display: inline-block; animation: spin 1s linear infinite; }

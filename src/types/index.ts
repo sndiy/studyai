@@ -21,6 +21,7 @@ export interface Settings {
   persona_prompt: string
   persona_limit:  string
   max_tokens:     string
+  theme?:         'light' | 'dark'
 }
 
 export interface ChatMessage {
