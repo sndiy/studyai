@@ -59,7 +59,7 @@ Ini akan:
 2. Di section **AI Providers** → expand **Google Gemini**
 3. Masukkan API key dari: https://aistudio.google.com/app/apikey
 4. Klik **Validasi & Simpan Key**
-5. Pilih model (default: gemini-2.5-flash)
+5. Pilih model (default: gemini-1.5-flash)
 
 ---
 

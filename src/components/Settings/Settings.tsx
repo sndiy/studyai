@@ -4,7 +4,6 @@ import './Settings.css'
 
 // Group prefixes for dropdown grouping
 const GEMINI_GROUPS: { label: string; match: (m: string) => boolean }[] = [
-  { label: 'Gemini 2.5', match: m => m.startsWith('gemini-2.5') },
   { label: 'Gemini 2.0', match: m => m.startsWith('gemini-2.0') },
   { label: 'Gemini 1.5', match: m => m.startsWith('gemini-1.5') },
   { label: 'Lainnya',    match: () => true },
@@ -12,7 +11,11 @@ const GEMINI_GROUPS: { label: string; match: (m: string) => boolean }[] = [
 
 function groupModels(models: string[]): { label: string; models: string[] }[] {
   const used = new Set<string>()
-  return GEMINI_GROUPS
+  return [
+    { label: 'Gemini 2.0', match: (m: string) => m.startsWith('gemini-2.0') },
+    { label: 'Gemini 1.5', match: (m: string) => m.startsWith('gemini-1.5') },
+    { label: 'Lainnya',    match: () => true },
+  ]
     .map(g => ({
       label: g.label,
       models: models.filter(m => !used.has(m) && g.match(m) && (used.add(m), true))
@@ -27,7 +30,7 @@ export default function Settings() {
   const [geminiKey,     setGeminiKey]     = useState(settings?.gemini_api_key ?? '')
   const [maxTokens,     setMaxTokens]     = useState(settings?.max_tokens ?? '2048')
   const [openaiKey,     setOpenaiKey]     = useState(settings?.openai_api_key ?? '')
-  const [claudeKey,     setClaudeKey]     = useState(settings?.claude_api_key ?? '')
+  const [claudeKey,     setClaudeKey]     = useState(settings?.openai_api_key_unused ?? '')
   const [personaName,   setPersonaName]   = useState(settings?.persona_name ?? 'Mai')
   const [personaPrompt, setPersonaPrompt] = useState(settings?.persona_prompt ?? '')
   const [personaLimit,  setPersonaLimit]  = useState(settings?.persona_limit ?? '')
@@ -56,8 +59,7 @@ export default function Settings() {
       .sort((a, b) => {
         const score = (s: string) => {
           let n = 0
-          if (s.includes('2.5')) n += 300
-          else if (s.includes('2.0')) n += 200
+          if (s.includes('2.0')) n += 200
           else if (s.includes('1.5')) n += 100
           // prefer non-preview, non-tts, non-audio, non-image for top slots
           if (!s.includes('preview') && !s.includes('tts') && !s.includes('audio') && !s.includes('image') && !s.includes('native')) n += 10
@@ -189,7 +191,7 @@ export default function Settings() {
               {/* Quota info */}
               <div className="quota-info">
                 <i className="ti ti-info-circle" />
-                Free tier: 2.5-flash 250 req/hari · 2.5-flash-lite 1000 req/hari · 2.5-pro 100 req/hari
+                Free tier: 1.5-flash 15 req/mnt · 1.5-pro 2 req/mnt · 2.0-flash experimental
               </div>
             </div>
           )}
@@ -209,12 +211,12 @@ export default function Settings() {
         {/* Claude */}
         <ProviderCard
           logo="C" logoClass="plogo-claude" name="Anthropic Claude"
-          connected={!!settings?.claude_api_key}
+          connected={!!settings?.openai_api_key_unused}
           activeModel={activeModel}
           apiKey={claudeKey} setApiKey={setClaudeKey}
           models={['claude-sonnet-4-5', 'claude-haiku-4-5']}
           onSelectModel={m => updateSetting('active_model', m)}
-          onSave={async () => { await updateSetting('claude_api_key', claudeKey) }}
+          onSave={async () => { await updateSetting('openai_api_key_unused', claudeKey) }}
           note="Claude API belum didukung streaming langsung. Gunakan Gemini untuk performa terbaik."
         />
       </div>

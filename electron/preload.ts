@@ -8,43 +8,20 @@ contextBridge.exposeInMainWorld('api', {
     close:    () => ipcRenderer.send('window-close'),
   },
 
-  notes: {
-    getAll:  ()           => ipcRenderer.invoke('notes:getAll'),
-    get:     (id: number) => ipcRenderer.invoke('notes:get', id),
-    create:  (data: any)  => ipcRenderer.invoke('notes:create', data),
-    save:    (note: any)  => ipcRenderer.invoke('notes:save', note),
-    delete:  (id: number) => ipcRenderer.invoke('notes:delete', id),
-  },
-
   settings: {
     getAll: ()                           => ipcRenderer.invoke('settings:getAll'),
     set:    (key: string, value: string) => ipcRenderer.invoke('settings:set', key, value),
   },
 
-  chat: {
-    getByNote:   (noteId: string)  => ipcRenderer.invoke('chat:getHistory', noteId ? Number(noteId) : null),
-    getGlobal:   ()                => ipcRenderer.invoke('chat:getHistory', null),
-    save:        (msg: any)        => ipcRenderer.invoke('chat:addMessage', msg.note_id ?? null, msg.role, msg.content),
-    clearByNote: (noteId: string)  => ipcRenderer.invoke('chat:clearHistory', noteId ? Number(noteId) : null),
-  },
-
-  stats: {
-    get:       () => ipcRenderer.invoke('stats:get'),
-    today:     () => ipcRenderer.invoke('stats:get'),
-    getRange:  () => Promise.resolve([]),
-    increment: () => Promise.resolve({ ok: true }),
-  },
-
-  streak: {
-    get: () => ipcRenderer.invoke('streak:get'),
+  recent: {
+    getAll: ()               => ipcRenderer.invoke('recent:getAll'),
+    remove: (path: string)   => ipcRenderer.invoke('recent:remove', path),
   },
 
   file: {
-    import:          ()          => ipcRenderer.invoke('file:import'),
-    save:            (note: any) => ipcRenderer.invoke('file:save', note),
-    saveAs:          (note: any) => ipcRenderer.invoke('file:saveAs', note),
-    registerPath:    (noteId: number, filePath: string) => ipcRenderer.invoke('file:registerPath', noteId, filePath),
-    openAsContext:   ()          => ipcRenderer.invoke('file:openAsContext'),
+    open:          ()         => ipcRenderer.invoke('file:open'),
+    save:          (note: any) => ipcRenderer.invoke('file:save', note),
+    openAsContext: ()         => ipcRenderer.invoke('file:openAsContext'),
   },
 
   ai: {

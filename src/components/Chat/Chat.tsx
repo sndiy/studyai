@@ -6,51 +6,39 @@ import './Chat.css'
 
 marked.setOptions({ breaks: true, gfm: true } as any)
 
-export default function Chat({ noteId }: { noteId?: number | null }) {
+interface ChatProps {
+  embedded?: boolean  // true = panel kanan editor, false = full page
+}
+
+export default function Chat({ embedded = false }: ChatProps) {
   const {
-    settings, messages, loadHistory, sendMessage, clearHistory,
+    settings, messages, sendMessage, clearMessages,
     streamingText, aiStatus, aiStatusDetail, cancelStream,
-    selectedNote
+    doc,
   } = useStore()
 
   const [input, setInput]               = useState('')
-  const [useContext, setUseContext]     = useState(true)
+  const [useContext, setUseContext]      = useState(false)
   const [useWebSearch, setWebSearch]    = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
-  // Konteks dari file yang dipilih user (title + content, tidak masuk DB)
   const [fileContext, setFileContext]   = useState<{ title: string; content: string } | null>(null)
 
   const bottomRef   = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const isFreeChat = noteId === null || noteId === undefined
+  const isProcessing = aiStatus !== 'idle' && aiStatus !== 'error'
 
-  // Konteks yang aktif: free chat → dari file picker, editor chat → dari selectedNote
-  const contextContent = useContext
-    ? (isFreeChat ? fileContext?.content ?? null : selectedNote?.content ?? null)
+  // Konteks aktif
+  const activeContext = useContext
+    ? (doc ? { title: doc.title, content: doc.content } : fileContext)
     : null
-  const contextTitle = useContext
-    ? (isFreeChat ? fileContext?.title ?? null : selectedNote?.title ?? null)
-    : null
-
-  // [Fix] Tambah loadHistory ke dependency array
-  useEffect(() => {
-    loadHistory(isFreeChat ? null : (noteId ? String(noteId) : null))
-  }, [noteId, loadHistory])
-
-  // Reset fileContext saat pindah ke editor chat (non-free)
-  useEffect(() => {
-    if (!isFreeChat) setFileContext(null)
-  }, [isFreeChat])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length, streamingText])
 
   useEffect(() => {
-    if (aiStatus === 'idle') {
-      setTimeout(() => textareaRef.current?.focus(), 50)
-    }
+    if (aiStatus === 'idle') setTimeout(() => textareaRef.current?.focus(), 50)
   }, [aiStatus])
 
   useEffect(() => {
@@ -60,38 +48,7 @@ export default function Chat({ noteId }: { noteId?: number | null }) {
     ta.style.height = Math.min(ta.scrollHeight, 120) + 'px'
   }, [input])
 
-
-
-  const isProcessing = aiStatus !== 'idle' && aiStatus !== 'error'
-
-  const handleSend = useCallback(async () => {
-    const text = input.trim()
-    if (!text || isProcessing) return
-    setInput('')
-    if (textareaRef.current) textareaRef.current.style.height = 'auto'
-    textareaRef.current?.focus()
-
-    // Free chat: pakai fileContext sebagai konteks (inject langsung ke systemPrompt via store)
-    // Editor chat: pakai noteId seperti biasa
-    const sendNoteId = useContext && !isFreeChat && noteId ? String(noteId) : null
-    await sendMessage(text, sendNoteId, useContext && !!contextContent, useWebSearch, null, isFreeChat ? fileContext : null)
-  }, [input, isProcessing, noteId, useContext, useWebSearch, sendMessage, isFreeChat, fileContext, contextContent])
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
-  }
-
-  const handleToggleContext = async () => {
-    const next = !useContext
-    setUseContext(next)
-    // Kalau aktifkan konteks di free chat dan belum ada file → langsung buka picker
-    if (next && isFreeChat && !fileContext) {
-      const result = await window.api.file.openAsContext()
-      if (result) setFileContext({ title: result.title, content: result.content })
-    }
-  }
-
-  const handlePickFile = async () => {
+  const handlePickContextFile = async () => {
     const result = await window.api.file.openAsContext()
     if (result) {
       setFileContext({ title: result.title, content: result.content })
@@ -99,16 +56,32 @@ export default function Chat({ noteId }: { noteId?: number | null }) {
     }
   }
 
+  const handleSend = useCallback(async () => {
+    const text = input.trim()
+    if (!text || isProcessing) return
+    setInput('')
+    if (textareaRef.current) textareaRef.current.style.height = 'auto'
+    textareaRef.current?.focus()
+    await sendMessage(text, useContext, useWebSearch, useContext && !doc ? fileContext : null)
+  }, [input, isProcessing, useContext, useWebSearch, sendMessage, doc, fileContext])
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
+  }
+
   const personaName = settings?.persona_name ?? 'Mai'
 
-  const ctxLabel = useContext
-    ? (contextTitle
-        ? contextTitle.length > 20 ? contextTitle.slice(0, 20) + '…' : contextTitle
-        : isFreeChat ? 'Pilih File…' : 'Tanpa Catatan')
-    : 'Tanpa Konteks'
+  const ctxLabel = !useContext
+    ? 'Konteks'
+    : doc
+      ? (doc.title.length > 16 ? doc.title.slice(0, 16) + '…' : doc.title)
+      : fileContext
+        ? (fileContext.title.length > 16 ? fileContext.title.slice(0, 16) + '…' : fileContext.title)
+        : 'Pilih File…'
 
   return (
-    <div className="chat-container">
+    <div className={`chat-wrap ${embedded ? 'embedded' : 'standalone'}`}>
+
       {/* Header */}
       <div className="chat-header">
         <div className="chat-persona">
@@ -120,34 +93,24 @@ export default function Chat({ noteId }: { noteId?: number | null }) {
             </div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+
+        <div className="chat-header-actions">
           {isProcessing && (
-            <button className="btn-danger" onClick={cancelStream}>
-              <i className="ti ti-player-stop" /> Stop
+            <button className="hdr-btn danger" onClick={cancelStream} title="Hentikan">
+              <i className="ti ti-player-stop" />
             </button>
           )}
           {confirmClear ? (
             <>
-              <button
-                className="btn-danger"
-                onClick={async () => {
-                  setConfirmClear(false)
-                  await clearHistory(isFreeChat ? null : (noteId ? String(noteId) : null))
-                  textareaRef.current?.focus()
-                }}
-              >
+              <button className="hdr-btn danger" onClick={() => { clearMessages(); setConfirmClear(false) }}>
                 <i className="ti ti-check" /> Yakin?
               </button>
-              <button
-                className="btn-secondary"
-                onClick={() => { setConfirmClear(false); textareaRef.current?.focus() }}
-              >
-                Batal
-              </button>
+              <button className="hdr-btn" onClick={() => setConfirmClear(false)}>Batal</button>
             </>
           ) : (
-            <button className="btn-secondary" onClick={() => setConfirmClear(true)}>
-              <i className="ti ti-trash" /> Bersihkan
+            <button className="hdr-btn" onClick={() => setConfirmClear(true)} title="Bersihkan chat">
+              <i className="ti ti-trash" />
+              {!embedded && <span>Bersihkan</span>}
             </button>
           )}
         </div>
@@ -158,22 +121,22 @@ export default function Chat({ noteId }: { noteId?: number | null }) {
         {messages.length === 0 && !streamingText && aiStatus === 'idle' && (
           <WelcomeScreen
             personaName={personaName}
-            hasContext={useContext && !!contextContent}
-            noteTitle={contextTitle ?? undefined}
-            webSearch={useWebSearch}
-            isFreeChat={isFreeChat}
-            noContextFile={useContext && isFreeChat && !fileContext}
-            onPickFile={handlePickFile}
+            activeContext={activeContext}
+            embedded={embedded}
+            onPickFile={handlePickContextFile}
+            useContext={useContext}
           />
         )}
+
         {messages.map((msg, i) => (
           <MessageBubble key={i} msg={msg} personaName={personaName} />
         ))}
+
         {(streamingText || isProcessing) && (
           <StreamingBubble
             text={streamingText}
             status={aiStatus}
-            statusDetail={aiStatusDetail}
+            detail={aiStatusDetail}
             personaName={personaName}
           />
         )}
@@ -182,68 +145,77 @@ export default function Chat({ noteId }: { noteId?: number | null }) {
 
       {/* Input area */}
       <div className="chat-input-area">
-        <div className="chat-controls">
 
-          {/* Tombol Pakai Konteks — klik buka file picker (.md/.json/.txt) */}
+        {/* Context + status bar */}
+        <div className="chat-controls">
           <button
-            className={`ctx-toggle ${useContext ? 'on' : ''} ${useContext && !contextContent && isFreeChat ? 'ctx-warn' : ''}`}
-            onClick={handleToggleContext}
-            title={useContext ? 'Klik untuk nonaktifkan konteks' : 'Klik untuk pilih file konteks'}
+            className={`pill-btn ${useContext ? 'on' : ''}`}
+            onClick={async () => {
+              const next = !useContext
+              setUseContext(next)
+              if (next && !doc && !fileContext) await handlePickContextFile()
+            }}
+            title={useContext ? 'Nonaktifkan konteks' : 'Aktifkan konteks file'}
           >
-            <i className="ti ti-file-text" />
+            <i className={`ti ${useContext && activeContext ? 'ti-file-check' : 'ti-file-text'}`} />
             {ctxLabel}
-            {isFreeChat && fileContext && useContext && (
-              <i
-                className="ti ti-refresh"
-                style={{ fontSize: 10, marginLeft: 4, opacity: 0.7 }}
-                onClick={e => { e.stopPropagation(); handlePickFile() }}
-                title="Ganti file konteks"
-              />
-            )}
           </button>
 
-          {/* Web Search toggle */}
+          {useContext && !doc && (
+            <button className="pill-btn" onClick={handlePickContextFile} title="Ganti file konteks">
+              <i className="ti ti-refresh" />
+            </button>
+          )}
+
           <button
-            className={`ctx-toggle web-toggle ${useWebSearch ? 'on-web' : ''}`}
+            className={`pill-btn ${useWebSearch ? 'on-web' : ''}`}
             onClick={() => setWebSearch(v => !v)}
-            title="Aktifkan referensi pengetahuan ekstra dari AI"
+            title="Toggle web search"
           >
             <i className="ti ti-world" />
-            {useWebSearch ? 'Web Aktif' : 'Web Off'}
+            {!embedded && (useWebSearch ? 'Web On' : 'Web Off')}
           </button>
 
-          <AIStatusBadge status={aiStatus} detail={aiStatusDetail} />
+          {aiStatus !== 'idle' && (
+            <span className={`status-pill ${aiStatus === 'error' ? 'err' : 'proc'}`}>
+              <i className={`ti ${aiStatus === 'error' ? 'ti-alert-circle' : 'ti-loader-2 spin'}`} />
+              {!embedded && (aiStatusDetail || getStatusLabel(aiStatus))}
+            </span>
+          )}
         </div>
 
-        {useContext && contextTitle && (
-          <div className="ctx-active-bar">
-            <i className="ti ti-file-text" />
-            <span>Konteks: <strong>{contextTitle}</strong></span>
-            {isFreeChat && (
-              <button className="ctx-active-change" onClick={handlePickFile} title="Ganti file">
-                <i className="ti ti-pencil" /> Ganti
+        {/* Active context bar */}
+        {useContext && activeContext && (
+          <div className="ctx-bar active">
+            <i className="ti ti-file-check" />
+            <span className="ctx-bar-title">{activeContext.title}</span>
+            {!doc && (
+              <button className="ctx-bar-btn" onClick={handlePickContextFile}>
+                <i className="ti ti-pencil" />
               </button>
             )}
           </div>
         )}
 
-        {useContext && isFreeChat && !fileContext && (
-          <div className="ctx-warn-bar">
+        {/* Warning: no file selected */}
+        {useContext && !activeContext && (
+          <div className="ctx-bar warn">
             <i className="ti ti-alert-circle" />
-            <span>Belum ada file dipilih sebagai konteks.</span>
-            <button className="ctx-active-change" onClick={handlePickFile}>
-              <i className="ti ti-folder-open" /> Pilih File
+            <span>Belum ada file dipilih</span>
+            <button className="ctx-bar-btn" onClick={handlePickContextFile}>
+              <i className="ti ti-folder-open" /> Pilih
             </button>
           </div>
         )}
 
-        <div className="chat-input-box">
+        {/* Textarea + send */}
+        <div className="input-row">
           <textarea
             ref={textareaRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder={`Tanya ${personaName}... (Enter kirim, Shift+Enter baris baru)`}
+            placeholder={`Tanya ${personaName}…`}
             rows={1}
             disabled={isProcessing}
           />
@@ -255,6 +227,7 @@ export default function Chat({ noteId }: { noteId?: number | null }) {
             <i className={`ti ${isProcessing ? 'ti-loader-2 spin' : 'ti-send'}`} />
           </button>
         </div>
+
       </div>
     </div>
   )
@@ -262,114 +235,94 @@ export default function Chat({ noteId }: { noteId?: number | null }) {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function WelcomeScreen({ personaName, hasContext, noteTitle, webSearch, isFreeChat, noContextFile, onPickFile }: {
+function WelcomeScreen({ personaName, activeContext, embedded, onPickFile, useContext }: {
   personaName: string
-  hasContext: boolean
-  noteTitle?: string
-  webSearch: boolean
-  isFreeChat: boolean
-  noContextFile: boolean
+  activeContext: { title: string; content: string } | null
+  embedded: boolean
   onPickFile: () => void
+  useContext: boolean
 }) {
   return (
     <div className="chat-welcome">
-      <div style={{ fontSize: 38, marginBottom: 8 }}>🌸</div>
-      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
-        Halo! Aku {personaName}
-      </div>
-      <div style={{ fontSize: 12.5, color: 'var(--text-dim)', textAlign: 'center', maxWidth: 280, lineHeight: 1.65 }}>
-        Tanya apa aja soal materi yang lagi kamu pelajari. Dokumen panjang akan dipecah otomatis.
-      </div>
-      {hasContext && noteTitle && (
-        <div className="context-badge">
-          <i className="ti ti-file-text" /> Konteks: {noteTitle}
+      <div className="welcome-avatar">🌸</div>
+      <div className="welcome-name">Halo! Aku {personaName}</div>
+      {!embedded && (
+        <div className="welcome-sub">
+          Tanya apa aja. Aktifkan konteks untuk analisis file yang dibuka.
         </div>
       )}
-      {noContextFile && (
-        <button
-          className="context-badge"
-          style={{ cursor: 'pointer', border: '0.5px dashed var(--border-sub)', background: 'transparent', marginTop: 8 }}
-          onClick={onPickFile}
-        >
-          <i className="ti ti-folder-open" /> Pilih file konteks (.md / .json / .txt)
+      {activeContext && (
+        <div className="ctx-badge">
+          <i className="ti ti-file-check" /> {activeContext.title}
+        </div>
+      )}
+      {useContext && !activeContext && (
+        <button className="ctx-badge pick" onClick={onPickFile}>
+          <i className="ti ti-folder-open" /> Pilih file konteks
         </button>
-      )}
-      {webSearch && (
-        <div className="context-badge" style={{ borderColor: '#1e3820', background: 'rgba(72,200,150,0.08)', color: 'var(--green)' }}>
-          <i className="ti ti-world" style={{ color: 'var(--green)' }} /> Web Search aktif
-        </div>
       )}
     </div>
   )
 }
 
 function MessageBubble({ msg, personaName }: { msg: ChatMessage; personaName: string }) {
+  const isUser = msg.role === 'user'
   return (
-    <div className={`chat-msg ${msg.role}`}>
-      <div className="chat-name">
-        <i className={`ti ${msg.role === 'user' ? 'ti-user' : 'ti-sparkles'}`} />
-        {msg.role === 'user' ? 'Kamu' : personaName}
+    <div className={`msg-row ${isUser ? 'user' : 'ai'}`}>
+      {!isUser && (
+        <div className="msg-avatar ai-avatar">🌸</div>
+      )}
+      <div className="msg-col">
+        <div className="msg-name">
+          {isUser ? 'Kamu' : personaName}
+        </div>
+        <div className={`bubble ${isUser ? 'user' : 'ai'}`}>
+          <div className="md-preview"
+            dangerouslySetInnerHTML={{ __html: marked(msg.content || '') as string }} />
+        </div>
       </div>
-      <div className={`chat-bubble ${msg.role}`}>
-        <MarkdownContent content={msg.content} />
-      </div>
+      {isUser && (
+        <div className="msg-avatar user-avatar">
+          <i className="ti ti-user" />
+        </div>
+      )}
     </div>
   )
 }
 
-function StreamingBubble({ text, status, statusDetail, personaName }: {
-  text: string; status: AIStatus; statusDetail: string; personaName: string
+function StreamingBubble({ text, status, detail, personaName }: {
+  text: string; status: AIStatus; detail: string; personaName: string
 }) {
   return (
-    <div className="chat-msg assistant">
-      <div className="chat-name">
-        <i className="ti ti-sparkles" />
-        {personaName}
-        <span className="streaming-dot" />
-      </div>
-      <div className="chat-bubble assistant">
-        {status !== 'streaming' && status !== 'idle' && (
-          <div className="status-inline">
-            <i className="ti ti-loader-2 spin" />
-            {getStatusLabel(status, statusDetail)}
-          </div>
-        )}
-        {text && <MarkdownContent content={text} />}
-        {status === 'streaming' && <span className="cursor-blink">▋</span>}
+    <div className="msg-row ai">
+      <div className="msg-avatar ai-avatar streaming">🌸</div>
+      <div className="msg-col">
+        <div className="msg-name">
+          {personaName}
+          <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
+        </div>
+        <div className="bubble ai">
+          {status !== 'streaming' && status !== 'idle' && (
+            <div className="status-line">
+              <i className="ti ti-loader-2 spin" />
+              {detail || getStatusLabel(status)}
+            </div>
+          )}
+          {text && (
+            <div className="md-preview"
+              dangerouslySetInnerHTML={{ __html: marked(text) as string }} />
+          )}
+          {status === 'streaming' && <span className="cursor-blink">▋</span>}
+        </div>
       </div>
     </div>
   )
 }
 
-function AIStatusBadge({ status, detail }: { status: AIStatus; detail: string }) {
-  if (status === 'idle') return null
-  if (status === 'error') return (
-    <span className="status-badge error">
-      <i className="ti ti-alert-circle" /> {detail || 'Error'}
-    </span>
-  )
-  return (
-    <span className="status-badge processing">
-      <i className="ti ti-loader-2 spin" />
-      {getStatusLabel(status, detail)}
-    </span>
-  )
-}
-
-function getStatusLabel(status: AIStatus, detail: string): string {
-  const base: Record<AIStatus, string> = {
-    idle: '', chunking: 'Memecah dokumen...', selecting: 'Memilih konteks relevan...',
-    sending: 'Mengirim ke AI...', streaming: 'Generating...', error: 'Error'
+function getStatusLabel(status: AIStatus): string {
+  const map: Record<AIStatus, string> = {
+    idle: '', chunking: 'Memecah dokumen...', selecting: 'Memilih konteks...',
+    sending: 'Mengirim...', streaming: 'Generating...', error: 'Error',
   }
-  return detail || base[status] || status
-}
-
-function MarkdownContent({ content }: { content: string }) {
-  const html = marked(content || '') as string
-  return (
-    <div
-      className="msg-content md-preview"
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  )
+  return map[status] || status
 }

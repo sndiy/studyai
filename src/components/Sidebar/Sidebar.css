@@ -128,3 +128,19 @@
 .provider-name { color: var(--text-secondary); font-weight: 500; flex: 1; font-size: 11px; }
 .provider-arrow { font-size: 12px; }
 .streak-badge { font-size: 11px; margin-left: auto; }
+
+/* dirty dot — indikator belum disimpan */
+.dirty-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #f59e0b; flex-shrink: 0; margin-left: auto;
+}
+
+/* tombol hapus recent */
+.recent-remove-btn {
+  margin-left: auto; background: none; border: none;
+  color: var(--text-dim); cursor: pointer; padding: 1px 3px;
+  font-size: 11px; border-radius: 4px; opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+.note-card:hover .recent-remove-btn { opacity: 1; }
+.recent-remove-btn:hover { color: var(--red); }
