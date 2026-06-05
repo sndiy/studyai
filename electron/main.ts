@@ -54,10 +54,12 @@ function addToRecent(filePath: string, title: string) {
 let win: BrowserWindow
 
 function createWindow() {
+  const iconPath = join(__dirname, '../../resources/icon.png')
   win = new BrowserWindow({
     width: 1280, height: 760, minWidth: 900, minHeight: 600,
     backgroundColor: '#0b0b0f',
     autoHideMenuBar: true,
+    icon: iconPath,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true, nodeIntegration: false,

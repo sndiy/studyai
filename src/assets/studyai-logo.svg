@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <!-- Purple glow filter -->
+    <filter id="glow-purple" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <!-- Mint glow filter -->
+    <filter id="glow-mint" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="1.8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <!-- Particle glow -->
+    <filter id="glow-particle" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="1.2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <!-- Book page gradient -->
+    <linearGradient id="page-left" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9b8dff"/>
+      <stop offset="100%" stop-color="#7c6af7"/>
+    </linearGradient>
+    <linearGradient id="page-right" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#6a58e8"/>
+      <stop offset="100%" stop-color="#5548d0"/>
+    </linearGradient>
+    <!-- Spine gradient -->
+    <linearGradient id="spine-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#48c896"/>
+      <stop offset="100%" stop-color="#38b084"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ══ BOOK SPINE (center bottom) ══ -->
+  <path d="M47.5 72 Q50 78 52.5 72" stroke="url(#spine-grad)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+
+  <!-- ══ LEFT PAGE ══ -->
+  <!-- Page body -->
+  <path d="M50 68 L50 28 Q40 24 28 26 L24 32 L24 70 Q36 68 50 68 Z"
+        fill="url(#page-left)" filter="url(#glow-purple)"/>
+  <!-- Page edge highlight -->
+  <path d="M50 28 Q40 24 28 26" stroke="#b3a6ff" stroke-width="0.8" fill="none" opacity="0.6"/>
+  <!-- Page lines (left) -->
+  <line x1="29" y1="36" x2="46" y2="35" stroke="white" stroke-width="0.6" opacity="0.25"/>
+  <line x1="29" y1="41" x2="46" y2="40" stroke="white" stroke-width="0.6" opacity="0.25"/>
+  <line x1="29" y1="46" x2="46" y2="45" stroke="white" stroke-width="0.5" opacity="0.2"/>
+  <line x1="29" y1="51" x2="44" y2="50" stroke="white" stroke-width="0.5" opacity="0.15"/>
+
+  <!-- ══ RIGHT PAGE ══ -->
+  <!-- Page body -->
+  <path d="M50 68 L50 28 Q60 24 72 26 L76 32 L76 70 Q64 68 50 68 Z"
+        fill="url(#page-right)"/>
+  <!-- Page edge highlight -->
+  <path d="M50 28 Q60 24 72 26" stroke="#9b8dff" stroke-width="0.8" fill="none" opacity="0.4"/>
+
+  <!-- ══ NEURAL STEM rising from book center ══ -->
+  <!-- Main vertical stem -->
+  <line x1="50" y1="68" x2="50" y2="22"
+        stroke="url(#spine-grad)" stroke-width="1.8" stroke-linecap="round"
+        filter="url(#glow-particle)" opacity="0.9"/>
+
+  <!-- Circuit branch left -->
+  <path d="M50 52 L43 48 L40 44" stroke="#48c896" stroke-width="1" fill="none"
+        stroke-linecap="round" opacity="0.7"/>
+  <!-- Circuit branch right -->
+  <path d="M50 44 L57 40 L59 36" stroke="#48c896" stroke-width="1" fill="none"
+        stroke-linecap="round" opacity="0.7"/>
+  <!-- Circuit branch left 2 -->
+  <path d="M50 38 L44 34" stroke="#48c896" stroke-width="0.8" fill="none"
+        stroke-linecap="round" opacity="0.5"/>
+
+  <!-- Node dots on stem -->
+  <circle cx="50" cy="60" r="2.2" fill="#48c896" filter="url(#glow-particle)"/>
+  <circle cx="50" cy="48" r="1.8" fill="#7eeec0" filter="url(#glow-particle)" opacity="0.9"/>
+  <circle cx="50" cy="36" r="1.5" fill="white" filter="url(#glow-particle)" opacity="0.85"/>
+
+  <!-- Branch endpoint dots -->
+  <circle cx="40" cy="44" r="1.2" fill="#48c896" opacity="0.8" filter="url(#glow-particle)"/>
+  <circle cx="59" cy="36" r="1.2" fill="#48c896" opacity="0.7" filter="url(#glow-particle)"/>
+  <circle cx="44" cy="34" r="1" fill="#7eeec0" opacity="0.6"/>
+
+  <!-- ══ SPARKLE top (4-point star) ══ -->
+  <!-- Big star -->
+  <path d="M50 14 L51.8 19.5 L57.5 21.3 L51.8 23.1 L50 28.6 L48.2 23.1 L42.5 21.3 L48.2 19.5 Z"
+        fill="#48c896" filter="url(#glow-mint)" opacity="0.95"/>
+  <!-- Small star top-right -->
+  <path d="M62 10 L62.9 12.7 L65.6 13.6 L62.9 14.5 L62 17.2 L61.1 14.5 L58.4 13.6 L61.1 12.7 Z"
+        fill="white" opacity="0.75" filter="url(#glow-particle)"/>
+  <!-- Tiny dot particles -->
+  <circle cx="56" cy="18" r="1.1" fill="white" opacity="0.7" filter="url(#glow-particle)"/>
+  <circle cx="64" cy="21" r="0.9" fill="#7eeec0" opacity="0.6"/>
+  <circle cx="44" cy="19" r="0.8" fill="white" opacity="0.5"/>
+  <circle cx="58" cy="25" r="0.7" fill="#48c896" opacity="0.5"/>
+  <circle cx="40" cy="24" r="0.9" fill="white" opacity="0.45"/>
+</svg>

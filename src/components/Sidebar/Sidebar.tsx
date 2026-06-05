@@ -2,6 +2,7 @@ import React from 'react'
 import { useStore } from '../../store/useStore'
 import type { View } from '../../types'
 import './Sidebar.css'
+import logoUrl from '../../assets/studyai-logo.png'
 
 function timeAgo(dateStr: string): string {
   const d    = new Date(dateStr).getTime()
@@ -12,6 +13,19 @@ function timeAgo(dateStr: string): string {
   if (diff < 86400)  return `${Math.floor(diff / 3600)} jam lalu`
   if (diff < 604800) return `${Math.floor(diff / 86400)} hari lalu`
   return `${Math.floor(diff / 604800)} minggu lalu`
+}
+
+// StudyAI Logo — menggunakan asset PNG asli
+function StudyAILogo({ size = 28 }: { size?: number }) {
+  return (
+    <img
+      src={logoUrl}
+      width={size}
+      height={size}
+      alt="StudyAI"
+      style={{ flexShrink: 0, borderRadius: 4, objectFit: 'contain' }}
+    />
+  )
 }
 
 export default function Sidebar() {
@@ -37,7 +51,9 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="sidebar-top">
         <div className="logo-row">
-          <div className="logo-icon">📚</div>
+          <div className="logo-icon">
+            <StudyAILogo size={28} />
+          </div>
           <span className="logo-text">StudyAI</span>
           <span className="logo-ver">v2.0</span>
         </div>

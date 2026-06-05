@@ -1,7 +1,7 @@
 {
   "name": "studyai",
   "version": "2.0.0",
-  "description": "StudyAI \u2014 Desktop Study Assistant with AI",
+  "description": "StudyAI — Desktop Study Assistant with AI",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -46,13 +46,21 @@
       "output": "release"
     },
     "files": [
-      "out/**/*"
+      "out/**/*",
+      "resources/**/*"
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "resources/icon.ico"
     },
     "linux": {
-      "target": "AppImage"
+      "target": "AppImage",
+      "icon": "resources/icon.png"
+    },
+    "icon": "resources/icon.png",
+    "mac": {
+      "icon": "resources/icon.png",
+      "category": "public.app-category.education"
     }
   }
 }
