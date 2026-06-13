@@ -19,9 +19,10 @@ contextBridge.exposeInMainWorld('api', {
   },
 
   file: {
-    open:          ()         => ipcRenderer.invoke('file:open'),
-    save:          (note: any) => ipcRenderer.invoke('file:save', note),
-    openAsContext: ()         => ipcRenderer.invoke('file:openAsContext'),
+    open:          ()              => ipcRenderer.invoke('file:open'),
+    save:          (note: any)     => ipcRenderer.invoke('file:save', note),
+    openAsContext: ()              => ipcRenderer.invoke('file:openAsContext'),
+    readDirect:    (path: string)  => ipcRenderer.invoke('file:readDirect', path),
   },
 
   ai: {

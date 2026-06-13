@@ -2,12 +2,6 @@ import React, { useState, useEffect } from 'react'
 import { useStore } from '../../store/useStore'
 import './Settings.css'
 
-// Group prefixes for dropdown grouping
-const GEMINI_GROUPS: { label: string; match: (m: string) => boolean }[] = [
-  { label: 'Gemini 2.0', match: m => m.startsWith('gemini-2.0') },
-  { label: 'Gemini 1.5', match: m => m.startsWith('gemini-1.5') },
-  { label: 'Lainnya',    match: () => true },
-]
 
 function groupModels(models: string[]): { label: string; models: string[] }[] {
   const used = new Set<string>()
@@ -242,13 +236,15 @@ export default function Settings() {
         {/* Claude */}
         <ProviderCard
           logo="C" logoClass="plogo-claude" name="Anthropic Claude"
-          connected={!!settings?.openai_api_key_unused}
+          connected={false}
           activeModel={activeModel}
           apiKey={claudeKey} setApiKey={setClaudeKey}
           models={['claude-sonnet-4-5', 'claude-haiku-4-5']}
-          onSelectModel={m => updateSetting('active_model', m)}
+          onSelectModel={_m => {
+            // Claude belum didukung — jangan switch model
+          }}
           onSave={async () => { await updateSetting('openai_api_key_unused', claudeKey) }}
-          note="Claude API belum didukung streaming langsung. Gunakan Gemini untuk performa terbaik."
+          note="⚠️ Claude streaming belum didukung. Key disimpan untuk rilis mendatang. Gunakan Gemini atau GPT."
         />
       </div>
 

@@ -51,6 +51,7 @@ declare global {
         open:          () => Promise<{ title: string; content: string; filePath: string } | null>
         save:          (note: { title: string; content: string; filePath?: string | null }) => Promise<{ ok: boolean; filePath?: string; canceled?: boolean; error?: string }>
         openAsContext: () => Promise<{ title: string; content: string; filePath: string } | null>
+        readDirect:    (path: string) => Promise<{ title: string; content: string; filePath: string } | null>
       }
       ai: {
         validateKey: (provider: string, key: string) => Promise<{ valid: boolean; models?: string[]; error?: string }>

@@ -132,9 +132,14 @@ export const useStore = create<StoreState>((set, get) => ({
     set({ recentFiles })
   },
 
-  openRecent: async (filePath, title) => {
-    const result = await window.api.file.open()
-    if (!result) return
+  openRecent: async (filePath, _title) => {
+    const result = await window.api.file.readDirect(filePath)
+    if (!result) {
+      // File mungkin sudah dihapus — hapus dari recent
+      await window.api.recent.remove(filePath)
+      await get().loadRecent()
+      return
+    }
     set({
       doc: { title: result.title, content: result.content, filePath: result.filePath, isDirty: false },
       currentView: 'editor',
@@ -171,10 +176,16 @@ export const useStore = create<StoreState>((set, get) => ({
     const { settings, doc, messages } = get()
     if (!settings || !userText.trim()) return
 
-    const current = get().aiStatus
-    if (current === 'streaming' || current === 'sending') return
-
-    set({ aiStatus: 'sending', aiStatusDetail: 'Mempersiapkan...', streamingText: '' })
+    // Atomic check-and-set to prevent race condition on double-click
+    let wasGuarded = false
+    set(state => {
+      if (state.aiStatus === 'streaming' || state.aiStatus === 'sending') {
+        wasGuarded = true
+        return state
+      }
+      return { ...state, aiStatus: 'sending' as const, aiStatusDetail: 'Mempersiapkan...', streamingText: '' }
+    })
+    if (wasGuarded) return
 
     try {
       const model  = settings.active_model ?? 'gemini-1.5-flash'
@@ -280,8 +291,14 @@ export const useStore = create<StoreState>((set, get) => ({
       await streamAI({ apiKey, model, messages: safeMessages, systemPrompt, onChunk, onProgress, abortSignal: abortController.signal, maxOutputTokens: maxTokens })
 
     } finally {
-      if (get().aiStatus !== 'idle' && get().aiStatus !== 'error') {
+      // Always cleanup abortController to prevent memory leak
+      const currentStatus = get().aiStatus
+      if (currentStatus === 'error') {
+        set({ abortController: null })
+      } else if (currentStatus !== 'idle') {
         set({ aiStatus: 'idle', aiStatusDetail: '', streamingText: '', abortController: null })
+      } else {
+        set({ abortController: null })
       }
     }
   },

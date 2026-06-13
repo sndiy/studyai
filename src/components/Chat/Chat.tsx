@@ -1,10 +1,24 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { useStore, type AIStatus } from '../../store/useStore'
 import type { ChatMessage } from '../../types'
 import './Chat.css'
 
 marked.setOptions({ breaks: true, gfm: true } as any)
+
+// Sanitize markdown HTML to prevent XSS (critical in Electron context)
+function renderMarkdown(content: string): string {
+  const rawHtml = marked(content || '') as string
+  return DOMPurify.sanitize(rawHtml, {
+    ALLOWED_TAGS: ['p','br','strong','em','del','ul','ol','li','h1','h2','h3',
+                   'h4','h5','h6','blockquote','pre','code','a','table','thead',
+                   'tbody','tr','th','td','hr','span','img','sup','sub'],
+    ALLOWED_ATTR: ['href','target','rel','class','alt','src'],
+    ALLOW_DATA_ATTR: false,
+  })
+}
+
 
 interface ChatProps {
   embedded?: boolean  // true = panel kanan editor, false = full page
@@ -170,10 +184,12 @@ export default function Chat({ embedded = false }: ChatProps) {
           <button
             className={`pill-btn ${useWebSearch ? 'on-web' : ''}`}
             onClick={() => setWebSearch(v => !v)}
-            title="Toggle web search"
+            title="Web search (segera hadir)"
+            style={{ opacity: 0.5, cursor: 'not-allowed' }}
+            disabled
           >
             <i className="ti ti-world" />
-            {!embedded && (useWebSearch ? 'Web On' : 'Web Off')}
+            {!embedded && 'Web (soon)'}
           </button>
 
           {aiStatus !== 'idle' && (
@@ -278,7 +294,7 @@ function MessageBubble({ msg, personaName }: { msg: ChatMessage; personaName: st
         </div>
         <div className={`bubble ${isUser ? 'user' : 'ai'}`}>
           <div className="md-preview"
-            dangerouslySetInnerHTML={{ __html: marked(msg.content || '') as string }} />
+            dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }} />
         </div>
       </div>
       {isUser && (
@@ -310,7 +326,7 @@ function StreamingBubble({ text, status, detail, personaName }: {
           )}
           {text && (
             <div className="md-preview"
-              dangerouslySetInnerHTML={{ __html: marked(text) as string }} />
+              dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }} />
           )}
           {status === 'streaming' && <span className="cursor-blink">▋</span>}
         </div>

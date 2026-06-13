@@ -5,12 +5,12 @@ import './Sidebar.css'
 import logoUrl from '../../assets/studyai-logo.png'
 
 function timeAgo(dateStr: string): string {
-  const d    = new Date(dateStr).getTime()
+  const d = new Date(dateStr).getTime()
   if (isNaN(d)) return dateStr
   const diff = Math.floor((Date.now() - d) / 1000)
-  if (diff < 60)     return 'baru saja'
-  if (diff < 3600)   return `${Math.floor(diff / 60)} menit lalu`
-  if (diff < 86400)  return `${Math.floor(diff / 3600)} jam lalu`
+  if (diff < 60) return 'baru saja'
+  if (diff < 3600) return `${Math.floor(diff / 60)} menit lalu`
+  if (diff < 86400) return `${Math.floor(diff / 3600)} jam lalu`
   if (diff < 604800) return `${Math.floor(diff / 86400)} hari lalu`
   return `${Math.floor(diff / 604800)} minggu lalu`
 }
@@ -37,13 +37,13 @@ export default function Sidebar() {
   } = useStore()
 
   const navItems: { id: View; icon: string; label: string }[] = [
-    { id: 'editor',   icon: 'ti-edit',     label: 'Editor'      },
-    { id: 'ai',       icon: 'ti-sparkles', label: 'Tanya AI'    },
-    { id: 'settings', icon: 'ti-settings', label: 'Pengaturan'  },
+    { id: 'editor', icon: 'ti-edit', label: 'Editor' },
+    { id: 'ai', icon: 'ti-sparkles', label: 'Tanya AI' },
+    { id: 'settings', icon: 'ti-settings', label: 'Pengaturan' },
   ]
 
   const activeModel = settings?.active_model ?? 'gemini-1.5-flash'
-  const hasKey      = !!(settings?.gemini_api_key || settings?.openai_api_key)
+  const hasKey = !!(settings?.gemini_api_key || settings?.openai_api_key)
 
   return (
     <aside className="sidebar">
@@ -55,7 +55,7 @@ export default function Sidebar() {
             <StudyAILogo size={28} />
           </div>
           <span className="logo-text">StudyAI</span>
-          <span className="logo-ver">v2.0</span>
+          <span className="logo-ver">v2.2</span>
         </div>
       </div>
 

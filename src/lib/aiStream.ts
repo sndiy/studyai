@@ -189,7 +189,7 @@ export async function streamGemini(opts: StreamOptions): Promise<void> {
 
   onProgress?.('sending', `Mengirim ke Gemini (${model})...`)
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${apiKey}&alt=sse`
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`
 
   const rawContents = messages.map(m => ({
     role: m.role === 'assistant' ? 'model' : 'user',
@@ -222,7 +222,7 @@ export async function streamGemini(opts: StreamOptions): Promise<void> {
   try {
     res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify(body),
       signal: abortSignal
     })
@@ -240,7 +240,9 @@ export async function streamGemini(opts: StreamOptions): Promise<void> {
       if (res.status === 400 && errMsg.toLowerCase().includes('token')) {
         errMsg = `Input terlalu panjang untuk model ${model}. Coba hapus history chat.`
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[StudyAI] Failed to parse Gemini error response:', e)
+    }
     onChunk({ text: '', done: true, error: errMsg })
     return
   }
@@ -259,7 +261,9 @@ export async function streamGemini(opts: StreamOptions): Promise<void> {
       }
       const text: string = parsed?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
       if (text) onChunk({ text, done: false })
-    } catch {}
+    } catch (e) {
+      console.warn('[StudyAI] Failed to parse Gemini SSE chunk:', e)
+    }
   }, onChunk)
 
   onChunk({ text: '', done: true })
@@ -311,7 +315,9 @@ export async function streamOpenAI(opts: StreamOptions): Promise<void> {
       if (res.status === 400 && errData?.error?.code === 'context_length_exceeded') {
         errMsg = `Input terlalu panjang untuk model ${model}. Coba hapus history chat.`
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[StudyAI] Failed to parse OpenAI error response:', e)
+    }
     onChunk({ text: '', done: true, error: errMsg })
     return
   }
@@ -330,7 +336,9 @@ export async function streamOpenAI(opts: StreamOptions): Promise<void> {
       if (finishReason === 'length') {
         onChunk({ text: '\n\n[Respons terpotong — output token limit tercapai]', done: false })
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[StudyAI] Failed to parse OpenAI SSE chunk:', e)
+    }
   }, onChunk)
 
   onChunk({ text: '', done: true })

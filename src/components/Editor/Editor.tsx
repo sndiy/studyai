@@ -89,7 +89,6 @@ function FloatingMenu({ editor }: { editor: any }) {
 export default function Editor() {
   const { doc, newDoc, openFile, saveDoc, updateContent, updateTitle } = useStore()
 
-  const [localTitle, setLocalTitle]           = useState('')
   const [showColorPicker, setShowColorPicker] = useState(false)
   const [showHlPicker, setShowHlPicker]       = useState(false)
   const [confirmNew, setConfirmNew]           = useState(false)
@@ -97,11 +96,7 @@ export default function Editor() {
   const colorRef  = useRef<HTMLDivElement>(null)
   const hlRef     = useRef<HTMLDivElement>(null)
   const isBinding = useRef(false)
-
-  // Sync localTitle dengan doc.title
-  useEffect(() => {
-    if (doc) setLocalTitle(doc.title)
-  }, [doc?.filePath])
+  const lastContentRef = useRef(doc?.content)
 
   const editor = useEditor({
     extensions: [
@@ -115,21 +110,30 @@ export default function Editor() {
     onUpdate: ({ editor }) => {
       if (isBinding.current) return
       const md = turndown.turndown(editor.getHTML())
+      lastContentRef.current = md
       updateContent(md)
     },
     editorProps: { attributes: { class: 'tiptap-editor-content', spellcheck: 'false' } },
   })
 
-  // Load konten saat doc berubah
+  // Load konten saat doc berubah secara eksternal
   useEffect(() => {
     if (!editor || !doc) return
+    if (doc.content === lastContentRef.current) return // Prevent reset on user typing
+
     isBinding.current = true
+    lastContentRef.current = doc.content
     const raw    = doc.content || ''
     const isHTML = /<[a-z][\s\S]*>/i.test(raw)
     editor.chain().clearContent(false).setContent(isHTML ? raw : marked.parse(raw) as string, false).run()
-    setLocalTitle(doc.title)
-    setTimeout(() => { isBinding.current = false }, 100)
-  }, [doc?.filePath, editor])
+    
+    // Unlock after TipTap finishes its update cycle (not a fragile fixed timeout)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        isBinding.current = false
+      })
+    })
+  }, [doc?.content, editor])
 
   // Ctrl+S
   useEffect(() => {
@@ -200,10 +204,9 @@ export default function Editor() {
 
         <input
           className="title-input"
-          value={localTitle}
+          value={doc.title}
           placeholder="Judul..."
           onChange={e => {
-            setLocalTitle(e.target.value)
             updateTitle(e.target.value)
           }}
         />

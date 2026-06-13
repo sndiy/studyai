@@ -106,6 +106,10 @@ export function chunkText(text: string): Chunk[] {
  * Pilih chunk paling relevan berdasarkan keyword dari pertanyaan user.
  * Simple TF-based scoring — tidak perlu vector DB untuk skala ini.
  */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 export function selectRelevantChunks(chunks: Chunk[], query: string, maxChunks = 3): Chunk[] {
   if (chunks.length <= maxChunks) return chunks
 
@@ -119,8 +123,8 @@ export function selectRelevantChunks(chunks: Chunk[], query: string, maxChunks =
     const lower = chunk.text.toLowerCase()
     let score = 0
     for (const word of queryWords) {
-      // Count occurrences
-      const matches = (lower.match(new RegExp(word, 'g')) ?? []).length
+      // Count occurrences — escape special regex chars to prevent crash
+      const matches = (lower.match(new RegExp(escapeRegExp(word), 'g')) ?? []).length
       score += matches
     }
     return { chunk, score }
