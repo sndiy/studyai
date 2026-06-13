@@ -124,8 +124,7 @@ export default function Editor() {
     isBinding.current = true
     lastContentRef.current = doc.content
     const raw    = doc.content || ''
-    const isHTML = /<[a-z][\s\S]*>/i.test(raw)
-    editor.chain().clearContent(false).setContent(isHTML ? raw : marked.parse(raw) as string, false).run()
+    editor.chain().clearContent(false).setContent(marked.parse(raw, { breaks: true }) as string, false).run()
     
     // Unlock after TipTap finishes its update cycle (not a fragile fixed timeout)
     requestAnimationFrame(() => {
