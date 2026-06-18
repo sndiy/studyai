@@ -22,6 +22,7 @@ export interface Settings {
   persona_limit:  string
   max_tokens:     string
   theme?:         'light' | 'dark'
+  openai_api_key_unused?: string  // Claude key (stored for future use)
 }
 
 export interface ChatMessage {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useStore } from '../../store/useStore'
 import './Settings.css'
 
@@ -31,6 +31,7 @@ export default function Settings() {
   const [personaLimit,  setPersonaLimit]  = useState(settings?.persona_limit ?? '')
   const [validating,    setValidating]    = useState<string | null>(null)
   const [validMsg,      setValidMsg]      = useState<{ ok: boolean; msg: string } | null>(null)
+  const [toastMsg,      setToastMsg]      = useState<{ ok: boolean; msg: string } | null>(null)
   const [geminiOpen,    setGeminiOpen]    = useState(true)
   const [detectedModels, setDetectedModels] = useState<string[]>([])
   const [loadingModels,  setLoadingModels]  = useState(false)
@@ -41,8 +42,11 @@ export default function Settings() {
     if (settings?.theme) setTheme(settings.theme)
   }, [settings?.theme])
 
+  const detectedModelsRef = useRef(detectedModels)
+  detectedModelsRef.current = detectedModels
+  
   useEffect(() => {
-    if (settings?.gemini_api_key && detectedModels.length === 0) {
+    if (settings?.gemini_api_key && detectedModelsRef.current.length === 0) {
       fetchGeminiModels(settings.gemini_api_key)
     }
   }, [settings?.gemini_api_key])
@@ -113,8 +117,8 @@ export default function Settings() {
     await updateSetting('persona_name', personaName)
     await updateSetting('persona_prompt', personaPrompt)
     await updateSetting('persona_limit', personaLimit)
-    setValidMsg({ ok: true, msg: '✅ Persona disimpan' })
-    setTimeout(() => setValidMsg(null), 2000)
+    setToastMsg({ ok: true, msg: '✅ Persona disimpan' })
+    setTimeout(() => setToastMsg(null), 2000)
   }
 
   const grouped = groupModels(detectedModels)
@@ -266,8 +270,8 @@ export default function Settings() {
               const v = parseInt(maxTokens)
               if (!isNaN(v) && v >= 256) {
                 await updateSetting('max_tokens', String(v))
-                setValidMsg({ ok: true, msg: `✅ Max tokens disimpan: ${v}` })
-                setTimeout(() => setValidMsg(null), 2000)
+                setToastMsg({ ok: true, msg: `✅ Max tokens disimpan: ${v}` })
+                setTimeout(() => setToastMsg(null), 2000)
               }
             }}>
             <i className="ti ti-device-floppy" /> Simpan
@@ -322,6 +326,12 @@ export default function Settings() {
           </div>
         </div>
       </div>
+      {/* Toast notification */}
+      {toastMsg && (
+        <div className={`settings-toast ${toastMsg.ok ? 'ok' : 'err'}`}>
+          {toastMsg.msg}
+        </div>
+      )}
     </div>
   )
 }

@@ -31,8 +31,13 @@ function loadSettings(): Record<string, string> {
 
 function atomicWriteSync(filePath: string, data: string) {
   const tmpPath = filePath + '.tmp'
-  writeFileSync(tmpPath, data, 'utf-8')
-  renameSync(tmpPath, filePath)
+  try {
+    writeFileSync(tmpPath, data, 'utf-8')
+    renameSync(tmpPath, filePath)
+  } catch {
+    // Fallback: direct write if rename fails (e.g., file locked on Windows)
+    writeFileSync(filePath, data, 'utf-8')
+  }
 }
 
 function saveSettings(data: Record<string, string>) {
@@ -75,6 +80,11 @@ function createWindow() {
       contextIsolation: true, nodeIntegration: false,
     },
   })
+  
+  win.on('closed', () => {
+    win = null
+  })
+
   if (process.env['ELECTRON_RENDERER_URL']) {
     win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -120,7 +130,8 @@ ipcMain.handle('file:readDirect', (_e, filePath: string) => {
 
 // ── File: Buka file (open dialog) ─────────────────────────────────────────────
 ipcMain.handle('file:open', async () => {
-  const res = await dialog.showOpenDialog(win!, {
+  if (!win) return null
+  const res = await dialog.showOpenDialog(win, {
     title: 'Buka File',
     filters: [
       { name: 'Markdown',   extensions: ['md']   },
@@ -175,7 +186,8 @@ ipcMain.handle('file:save', async (_e, note: {
   let targetPath = note.filePath
 
   if (!targetPath) {
-    const res = await dialog.showSaveDialog(win!, {
+    if (!win) return { ok: false, error: 'Window not available' }
+    const res = await dialog.showSaveDialog(win, {
       title: 'Simpan File',
       defaultPath: (note.title || 'Tanpa Judul') + '.md',
       filters: [
@@ -209,7 +221,8 @@ ipcMain.handle('file:save', async (_e, note: {
 
 // ── File: Buka file sebagai konteks chat ──────────────────────────────────────
 ipcMain.handle('file:openAsContext', async () => {
-  const res = await dialog.showOpenDialog(win!, {
+  if (!win) return null
+  const res = await dialog.showOpenDialog(win, {
     title: 'Pilih file sebagai konteks',
     filters: [
       { name: 'Markdown',   extensions: ['md']   },

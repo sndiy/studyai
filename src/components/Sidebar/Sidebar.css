@@ -3,6 +3,7 @@
   background: var(--bg-surface);
   border-right: 0.5px solid var(--border);
   display: flex; flex-direction: column;
+  transition: background 0.3s ease;
 }
 
 /* ── Top ─────────────────────────────────────────────────────────────── */
@@ -35,10 +36,23 @@
   display: flex; align-items: center; gap: 8px;
   padding: 7px 8px; border-radius: 7px; cursor: pointer;
   font-size: 12.5px; color: var(--text-muted); margin-bottom: 2px;
-  transition: all 0.15s;
+  transition: all 0.18s ease; position: relative;
 }
 .nav-item:hover { background: var(--bg-elevated); color: var(--text-secondary); }
-.nav-item.active { background: var(--accent-bg); color: var(--accent-soft); }
+.nav-item.active {
+  background: var(--accent-bg); color: var(--accent-soft);
+}
+.nav-item.active::before {
+  content: ''; position: absolute; left: -12px;
+  top: 50%; transform: translateY(-50%);
+  width: 3px; height: 18px; border-radius: 0 3px 3px 0;
+  background: var(--accent);
+  animation: indicatorIn 0.2s ease;
+}
+@keyframes indicatorIn {
+  from { height: 0; opacity: 0; }
+  to   { height: 18px; opacity: 1; }
+}
 .nav-item .ti { font-size: 15px; width: 18px; text-align: center; }
 .nav-badge {
   margin-left: auto; font-size: 10px;
@@ -68,8 +82,8 @@
   border-radius: var(--radius-md); padding: 10px 11px;
   cursor: pointer; transition: all 0.15s;
 }
-.note-card:hover { border-color: var(--border-sub); background: var(--bg-overlay); }
-.note-card.active { border-color: var(--accent); background: var(--accent-bg); }
+.note-card:hover { border-color: var(--border-sub); background: var(--bg-overlay); transform: translateY(-1px); }
+.note-card.active { border-color: var(--accent); background: var(--accent-bg); box-shadow: 0 0 0 1px var(--accent-border); }
 
 .note-card-title {
   display: flex; align-items: center; gap: 5px;
@@ -121,6 +135,11 @@
   padding: 7px 9px; background: var(--bg-elevated);
   border: 0.5px solid var(--border-sub); border-radius: var(--radius-md);
   cursor: pointer; font-size: 11.5px; color: var(--text-muted);
+  transition: all 0.18s ease;
+}
+.provider-badge:hover {
+  background: var(--bg-overlay); border-color: var(--border);
+  transform: translateY(-1px);
 }
 .provider-dot { width: 6px; height: 6px; border-radius: 50%; }
 .provider-dot.ok  { background: var(--green); }

@@ -8,10 +8,11 @@
   flex: 1; display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   color: var(--text-dim); gap: 8px;
+  animation: viewFadeIn 0.3s ease;
 }
-.empty-icon  { font-size: 40px; margin-bottom: 8px; }
-.empty-title { font-size: 16px; color: var(--text-muted); font-weight: 500; }
-.empty-sub   { font-size: 12.5px; }
+.empty-icon  { font-size: 48px; margin-bottom: 12px; filter: grayscale(0.3); }
+.empty-title { font-size: 17px; color: var(--text-muted); font-weight: 600; }
+.empty-sub   { font-size: 12.5px; max-width: 260px; text-align: center; line-height: 1.6; }
 
 /* ── Header ─────────────────────────────────────────────────────────────── */
 .editor-header { margin-bottom: 14px; flex-shrink: 0; }
@@ -103,7 +104,7 @@
 .tb-btn.active       { background: var(--accent-bg); color: var(--accent-soft); }
 .tb-btn:disabled     { opacity: 0.3; cursor: not-allowed; }
 .tb-btn:disabled:hover { background: none; color: var(--text-muted); }
-.tb-btn .ti          { font-size: 13px; flex-shrink: 0; }
+.tb-btn .ti          { font-size: 13px; flex-shrink: 0; transition: color 0.15s; }
 .tb-btn-label        { font-size: 10.5px; font-weight: 500; }
 .tb-sep              { width: 0.5px; height: 16px; background: var(--border-sub); margin: 0 3px; flex-shrink: 0; }
 
@@ -363,8 +364,9 @@
   display: flex; align-items: center; gap: 8px;
   padding-top: 12px; border-top: 0.5px solid var(--border);
   margin-top: 10px; flex-shrink: 0;
+  animation: viewFadeIn 0.2s ease;
 }
-.word-count { margin-left: auto; font-size: 11px; color: var(--text-dim); }
+.word-count { margin-left: auto; font-size: 11px; color: var(--text-dim); transition: color 0.15s; }
 
 /* ── Animations ──────────────────────────────────────────────────────────── */
 @keyframes spin { to { transform: rotate(360deg); } }

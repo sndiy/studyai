@@ -56,7 +56,7 @@ export function buildSafeMessages(
 
   // Budget terlalu kecil — kembalikan minimal 1 pesan user terakhir
   if (hardBudget - systemTokens <= 0) {
-    const last = history.findLast(m => m.role === 'user') ?? history[history.length - 1]
+    const last = [...history].reverse().find(m => m.role === 'user') ?? history[history.length - 1]
     return {
       safeMessages: last ? [last] : [],
       trimmedCount: history.length - (last ? 1 : 0),

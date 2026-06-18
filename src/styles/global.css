@@ -71,8 +71,12 @@ html, body, #root {
 ::-webkit-scrollbar-thumb { background: var(--border-sub); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
-button { font-family: var(--font); cursor: pointer; border: none; outline: none; }
+button { font-family: var(--font); cursor: pointer; border: none; outline: none; transition: transform 0.1s ease; }
+button:active:not(:disabled) { transform: scale(0.97); }
 input, textarea { font-family: var(--font); outline: none; border: none; }
+input:focus-visible, textarea:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-bg), 0 0 0 3px var(--accent-border);
+}
 
 .btn-primary {
   display: flex; align-items: center; gap: 6px;
@@ -97,11 +101,20 @@ input, textarea { font-family: var(--font); outline: none; border: none; }
 .btn-save-file {
   display: flex; align-items: center; gap: 6px;
   padding: 8px 18px;
-  background: #9b8dff;
+  background: linear-gradient(135deg, #9b8dff, #7c6af7);
   border: none; border-radius: var(--radius-md);
   font-size: 12.5px; font-weight: 600; color: #fff;
-  cursor: pointer; transition: background 0.15s, box-shadow 0.15s;
+  cursor: pointer; transition: all 0.2s ease;
   box-shadow: 0 0 12px #9b8dff55;
 }
-.btn-save-file:hover { background: #b3a6ff; box-shadow: 0 0 18px #9b8dff88; }
-.btn-save-file:active { background: #7c6af7; }
+.btn-save-file:hover { background: linear-gradient(135deg, #b3a6ff, #8878ff); box-shadow: 0 0 18px #9b8dff88; transform: translateY(-1px); }
+.btn-save-file:active { background: linear-gradient(135deg, #7c6af7, #6a58e8); transform: translateY(0); }
+
+/* ── View Transition Utility ───────────────────────────────────────────── */
+.main-area > * {
+  animation: viewFadeIn 0.2s ease;
+}
+@keyframes viewFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

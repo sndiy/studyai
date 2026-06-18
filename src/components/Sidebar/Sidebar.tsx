@@ -55,7 +55,7 @@ export default function Sidebar() {
             <StudyAILogo size={28} />
           </div>
           <span className="logo-text">StudyAI</span>
-          <span className="logo-ver">v2.2</span>
+          <span className="logo-ver">v2.3.0</span>
         </div>
       </div>
 

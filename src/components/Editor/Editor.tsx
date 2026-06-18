@@ -35,6 +35,7 @@ function TBtn({ active, disabled, onClick, icon, tip }: {
 
 function FloatingMenu({ editor }: { editor: any }) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const updateRef = useRef<() => void>(() => {})
 
   useEffect(() => {
     if (!editor) return
@@ -55,14 +56,17 @@ function FloatingMenu({ editor }: { editor: any }) {
       if (top < 4) top = rect.bottom - cr.top + 8
       setPos({ top, left })
     }
+    updateRef.current = update
     const onBlur = () => setPos(null)
+    // Use a stable wrapper to avoid stale closure for selectionchange
+    const stableUpdate = () => updateRef.current()
     editor.on('selectionUpdate', update)
     editor.on('blur', onBlur)
-    document.addEventListener('selectionchange', update)
+    document.addEventListener('selectionchange', stableUpdate)
     return () => {
       editor.off('selectionUpdate', update)
       editor.off('blur', onBlur)
-      document.removeEventListener('selectionchange', update)
+      document.removeEventListener('selectionchange', stableUpdate)
     }
   }, [editor])
 
@@ -87,7 +91,12 @@ function FloatingMenu({ editor }: { editor: any }) {
 }
 
 export default function Editor() {
-  const { doc, newDoc, openFile, saveDoc, updateContent, updateTitle } = useStore()
+  const doc = useStore(s => s.doc)
+  const newDoc = useStore(s => s.newDoc)
+  const openFile = useStore(s => s.openFile)
+  const saveDoc = useStore(s => s.saveDoc)
+  const updateContent = useStore(s => s.updateContent)
+  const updateTitle = useStore(s => s.updateTitle)
 
   const [showColorPicker, setShowColorPicker] = useState(false)
   const [showHlPicker, setShowHlPicker]       = useState(false)
@@ -96,7 +105,7 @@ export default function Editor() {
   const colorRef  = useRef<HTMLDivElement>(null)
   const hlRef     = useRef<HTMLDivElement>(null)
   const isBinding = useRef(false)
-  const lastContentRef = useRef(doc?.content)
+  const lastContentRef = useRef<string | null>(null)
 
   const editor = useEditor({
     extensions: [
@@ -124,14 +133,21 @@ export default function Editor() {
     isBinding.current = true
     lastContentRef.current = doc.content
     const raw    = doc.content || ''
-    editor.chain().clearContent(false).setContent(marked.parse(raw, { breaks: true }) as string, false).run()
-    
+    editor.chain().setContent(marked.parse(raw, { breaks: true }) as string, { emitUpdate: false }).run()
+
     // Unlock after TipTap finishes its update cycle (not a fragile fixed timeout)
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+    let raf1: number
+    let raf2: number
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
         isBinding.current = false
       })
     })
+    
+    return () => {
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
+    }
   }, [doc?.content, editor])
 
   // Ctrl+S

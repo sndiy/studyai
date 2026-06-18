@@ -49,6 +49,7 @@ interface StoreState {
   aiStatus:       AIStatus
   aiStatusDetail: string
   abortController: AbortController | null
+  _errorTimeoutId: ReturnType<typeof setTimeout> | null
   cancelStream: () => void
 }
 
@@ -170,7 +171,11 @@ export const useStore = create<StoreState>((set, get) => ({
   // ── Chat (in-memory) ───────────────────────────────────────────────────────
   messages: [],
 
-  clearMessages: () => set({ messages: [], streamingText: '', aiStatus: 'idle', aiStatusDetail: '' }),
+  clearMessages: () => {
+    const tid = get()._errorTimeoutId
+    if (tid) clearTimeout(tid)
+    set({ messages: [], streamingText: '', aiStatus: 'idle', aiStatusDetail: '', _errorTimeoutId: null })
+  },
 
   sendMessage: async (userText, useContext, useWebSearch = false, fileContext = null) => {
     const { settings, doc, messages } = get()
@@ -194,8 +199,10 @@ export const useStore = create<StoreState>((set, get) => ({
                    : ''
 
       if (!apiKey) {
-        set({ aiStatus: 'error', aiStatusDetail: 'API key belum dikonfigurasi. Buka Pengaturan.' })
-        setTimeout(() => set({ aiStatus: 'idle', aiStatusDetail: '' }), 4000)
+        const prev1 = get()._errorTimeoutId
+        if (prev1) clearTimeout(prev1)
+        const tid1 = setTimeout(() => set({ aiStatus: 'idle', aiStatusDetail: '', _errorTimeoutId: null }), 4000)
+        set({ aiStatus: 'error', aiStatusDetail: 'API key belum dikonfigurasi. Buka Pengaturan.', _errorTimeoutId: tid1 })
         return
       }
 
@@ -269,8 +276,10 @@ export const useStore = create<StoreState>((set, get) => ({
       const onChunk = ({ text, done, error }: { text: string; done: boolean; error?: string }) => {
         if (error) {
           const errMsg: ChatMessage = { role: 'assistant', content: `❌ **Error:** ${error}` }
-          set(state => ({ messages: [...state.messages, errMsg], streamingText: '', aiStatus: 'error', aiStatusDetail: error }))
-          setTimeout(() => set({ aiStatus: 'idle', aiStatusDetail: '' }), 5000)
+          const prev2 = get()._errorTimeoutId
+          if (prev2) clearTimeout(prev2)
+          const tid2 = setTimeout(() => set({ aiStatus: 'idle', aiStatusDetail: '', _errorTimeoutId: null }), 5000)
+          set(state => ({ messages: [...state.messages, errMsg], streamingText: '', aiStatus: 'error', aiStatusDetail: error, _errorTimeoutId: tid2 }))
           return
         }
         if (!done) {
@@ -308,12 +317,12 @@ export const useStore = create<StoreState>((set, get) => ({
   aiStatus:        'idle',
   aiStatusDetail:  '',
   abortController: null,
+  _errorTimeoutId: null,
 
   cancelStream: () => {
-    const { abortController } = get()
-    if (abortController) {
-      abortController.abort()
-      set({ abortController: null, aiStatus: 'idle', aiStatusDetail: '', streamingText: '' })
-    }
+    const { abortController, _errorTimeoutId } = get()
+    if (_errorTimeoutId) clearTimeout(_errorTimeoutId)
+    if (abortController) abortController.abort()
+    set({ abortController: null, aiStatus: 'idle', aiStatusDetail: '', streamingText: '', _errorTimeoutId: null })
   },
 }))

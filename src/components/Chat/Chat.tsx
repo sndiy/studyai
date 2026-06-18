@@ -5,11 +5,14 @@ import { useStore, type AIStatus } from '../../store/useStore'
 import type { ChatMessage } from '../../types'
 import './Chat.css'
 
-marked.setOptions({ breaks: true, gfm: true } as any)
+// Configure marked for synchronous use
+marked.setOptions({ breaks: true, gfm: true, async: false } as any)
+
+// (configured above at module level)
 
 // Sanitize markdown HTML to prevent XSS (critical in Electron context)
 function renderMarkdown(content: string): string {
-  const rawHtml = marked(content || '') as string
+  const rawHtml = marked.parse(content || '', { async: false }) as string
   return DOMPurify.sanitize(rawHtml, {
     ALLOWED_TAGS: ['p','br','strong','em','del','ul','ol','li','h1','h2','h3',
                    'h4','h5','h6','blockquote','pre','code','a','table','thead',
@@ -32,13 +35,16 @@ export default function Chat({ embedded = false }: ChatProps) {
   } = useStore()
 
   const [input, setInput]               = useState('')
-  const [useContext, setUseContext]      = useState(false)
+  const [useContext, setUseContext]      = useState(embedded)  // embedded mode defaults to true
   const [useWebSearch, setWebSearch]    = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
   const [fileContext, setFileContext]   = useState<{ title: string; content: string } | null>(null)
 
-  const bottomRef   = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const bottomRef    = useRef<HTMLDivElement>(null)
+  const textareaRef  = useRef<HTMLTextAreaElement>(null)
+  const messagesRef  = useRef<HTMLDivElement>(null)
+  const [showScrollBtn, setShowScrollBtn] = useState(false)
+  const [copiedIdx, setCopiedIdx]         = useState<number | null>(null)
 
   const isProcessing = aiStatus !== 'idle' && aiStatus !== 'error'
 
@@ -50,6 +56,18 @@ export default function Chat({ embedded = false }: ChatProps) {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length, streamingText])
+
+  // Track scroll position for scroll-to-bottom button
+  useEffect(() => {
+    const el = messagesRef.current
+    if (!el) return
+    const onScroll = () => {
+      const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+      setShowScrollBtn(distFromBottom > 120)
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
 
   useEffect(() => {
     if (aiStatus === 'idle') setTimeout(() => textareaRef.current?.focus(), 50)
@@ -78,6 +96,18 @@ export default function Chat({ embedded = false }: ChatProps) {
     textareaRef.current?.focus()
     await sendMessage(text, useContext, useWebSearch, useContext && !doc ? fileContext : null)
   }, [input, isProcessing, useContext, useWebSearch, sendMessage, doc, fileContext])
+
+  const handleCopy = useCallback((text: string, idx: number) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedIdx(idx)
+      setTimeout(() => setCopiedIdx(null), 2000)
+    })
+  }, [])
+
+  const handleSuggestion = useCallback((text: string) => {
+    setInput(text)
+    textareaRef.current?.focus()
+  }, [])
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
@@ -131,7 +161,7 @@ export default function Chat({ embedded = false }: ChatProps) {
       </div>
 
       {/* Messages */}
-      <div className="chat-messages">
+      <div className="chat-messages" ref={messagesRef}>
         {messages.length === 0 && !streamingText && aiStatus === 'idle' && (
           <WelcomeScreen
             personaName={personaName}
@@ -139,11 +169,19 @@ export default function Chat({ embedded = false }: ChatProps) {
             embedded={embedded}
             onPickFile={handlePickContextFile}
             useContext={useContext}
+            onSuggestion={handleSuggestion}
           />
         )}
 
         {messages.map((msg, i) => (
-          <MessageBubble key={i} msg={msg} personaName={personaName} />
+          <MessageBubble
+            key={i}
+            msg={msg}
+            personaName={personaName}
+            index={i}
+            copiedIdx={copiedIdx}
+            onCopy={handleCopy}
+          />
         ))}
 
         {(streamingText || isProcessing) && (
@@ -156,6 +194,16 @@ export default function Chat({ embedded = false }: ChatProps) {
         )}
         <div ref={bottomRef} />
       </div>
+
+      {/* Scroll to bottom */}
+      {showScrollBtn && (
+        <button
+          className="scroll-bottom-btn"
+          onClick={() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' })}
+        >
+          <i className="ti ti-arrow-down" />
+        </button>
+      )}
 
       {/* Input area */}
       <div className="chat-input-area">
@@ -251,12 +299,20 @@ export default function Chat({ embedded = false }: ChatProps) {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function WelcomeScreen({ personaName, activeContext, embedded, onPickFile, useContext }: {
+const SUGGESTIONS = [
+  'Jelaskan konsep ini secara sederhana',
+  'Buatkan ringkasan materi ini',
+  'Berikan contoh kode untuk topik ini',
+  'Apa kelebihan dan kekurangan?',
+]
+
+function WelcomeScreen({ personaName, activeContext, embedded, onPickFile, useContext, onSuggestion }: {
   personaName: string
   activeContext: { title: string; content: string } | null
   embedded: boolean
   onPickFile: () => void
   useContext: boolean
+  onSuggestion: (text: string) => void
 }) {
   return (
     <div className="chat-welcome">
@@ -277,11 +333,23 @@ function WelcomeScreen({ personaName, activeContext, embedded, onPickFile, useCo
           <i className="ti ti-folder-open" /> Pilih file konteks
         </button>
       )}
+      {!embedded && (
+        <div className="suggestion-chips">
+          {SUGGESTIONS.map((s, i) => (
+            <button key={i} className="suggestion-chip" onClick={() => onSuggestion(s)}>
+              <i className="ti ti-sparkles" /> {s}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
-function MessageBubble({ msg, personaName }: { msg: ChatMessage; personaName: string }) {
+function MessageBubble({ msg, personaName, index, copiedIdx, onCopy }: {
+  msg: ChatMessage; personaName: string; index: number;
+  copiedIdx: number | null; onCopy: (text: string, idx: number) => void;
+}) {
   const isUser = msg.role === 'user'
   return (
     <div className={`msg-row ${isUser ? 'user' : 'ai'}`}>
@@ -295,6 +363,18 @@ function MessageBubble({ msg, personaName }: { msg: ChatMessage; personaName: st
         <div className={`bubble ${isUser ? 'user' : 'ai'}`}>
           <div className="md-preview"
             dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }} />
+          {!isUser && (
+            <div className="bubble-actions">
+              <button
+                className={`copy-btn ${copiedIdx === index ? 'copied' : ''}`}
+                onClick={() => onCopy(msg.content, index)}
+                title="Salin respons"
+              >
+                <i className={`ti ${copiedIdx === index ? 'ti-check' : 'ti-copy'}`} />
+                {copiedIdx === index ? 'Tersalin!' : 'Salin'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
       {isUser && (

@@ -5,6 +5,7 @@
   display: flex; flex-direction: column;
   height: 100%; overflow: hidden;
   background: var(--bg-base);
+  position: relative;
 }
 
 .chat-wrap.standalone {
@@ -84,6 +85,25 @@
   max-width: 260px; line-height: 1.6; margin-top: 2px;
 }
 
+/* ── Suggestion Chips ───────────────────────────────────────────────────── */
+.suggestion-chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-top: 16px; justify-content: center;
+  max-width: 380px;
+}
+.suggestion-chip {
+  display: flex; align-items: center; gap: 5px;
+  padding: 6px 12px; border-radius: 20px;
+  background: var(--bg-elevated); border: 0.5px solid var(--border-sub);
+  color: var(--text-muted); font-size: 11.5px; cursor: pointer;
+  transition: all 0.18s ease; font-family: var(--font);
+}
+.suggestion-chip .ti { font-size: 11px; color: var(--accent); }
+.suggestion-chip:hover {
+  background: var(--accent-bg); border-color: var(--accent-border);
+  color: var(--accent-soft); transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(124,106,247,0.15);
+}
 .ctx-badge {
   display: inline-flex; align-items: center; gap: 6px;
   margin-top: 10px; padding: 5px 13px;
@@ -189,6 +209,52 @@
   border-top-left-radius: 4px;
 }
 
+/* ── Bubble Actions (copy button) ─────────────────────────────────────── */
+.bubble-actions {
+  display: flex; align-items: center; gap: 4px;
+  margin-top: 6px; padding-top: 6px;
+  border-top: 0.5px solid var(--border);
+  opacity: 0; transition: opacity 0.18s ease;
+}
+.bubble:hover .bubble-actions { opacity: 1; }
+
+.copy-btn {
+  display: flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 6px;
+  background: var(--bg-overlay); border: 0.5px solid var(--border-sub);
+  color: var(--text-dim); font-size: 10.5px; cursor: pointer;
+  font-family: var(--font); transition: all 0.15s;
+}
+.copy-btn .ti { font-size: 11px; }
+.copy-btn:hover {
+  background: var(--accent-bg); color: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+.copy-btn.copied {
+  background: var(--green-bg); color: var(--green);
+  border-color: var(--green);
+}
+
+/* ── Scroll to Bottom ─────────────────────────────────────────────────── */
+.scroll-bottom-btn {
+  position: absolute; bottom: 120px; right: 20px;
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--bg-elevated); border: 0.5px solid var(--border-sub);
+  color: var(--text-muted); cursor: pointer; z-index: 10;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; transition: all 0.18s;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  animation: fadeInUp 0.2s ease;
+}
+.scroll-bottom-btn:hover {
+  background: var(--accent-bg); border-color: var(--accent-border);
+  color: var(--accent); transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 /* ── Status line ─────────────────────────────────────────────────────────── */
 .status-line {
   display: flex; align-items: center; gap: 6px;
