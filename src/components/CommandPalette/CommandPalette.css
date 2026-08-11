@@ -1,0 +1,108 @@
+/* ── CommandPalette.css ───────────────────────────────────────────────────── */
+
+.cmdk-overlay {
+  position: fixed; inset: 0;
+  z-index: var(--z-modal);
+  display: flex; justify-content: center;
+  padding: 14vh var(--sp-4) var(--sp-4);
+  background: var(--scrim);
+  backdrop-filter: blur(8px);
+  animation: fadeIn var(--dur-2) var(--ease-out) both;
+}
+
+.cmdk-card {
+  display: flex; flex-direction: column;
+  width: 100%; max-width: 580px; max-height: 62vh;
+  overflow: hidden;
+  background: var(--surface-overlay);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-lg);
+  box-shadow: var(--elev-4);
+  backdrop-filter: blur(28px) saturate(180%);
+  animation: pop var(--dur-3) var(--ease-spring) both;
+}
+
+/* ── Pencarian ───────────────────────────────────────────────────────────── */
+.cmdk-search {
+  display: flex; align-items: center; gap: var(--sp-3);
+  flex-shrink: 0;
+  padding: var(--sp-4);
+  border-bottom: 1px solid var(--hairline);
+}
+.cmdk-search > .ti { font-size: var(--fs-lg); color: var(--text-dim); }
+
+.cmdk-input {
+  flex: 1;
+  background: none; border: none; outline: none;
+  font-family: var(--font); font-size: var(--fs-lg);
+  color: var(--text-primary);
+}
+.cmdk-input::placeholder { color: var(--text-dim); }
+.cmdk-input:focus-visible { box-shadow: none; }
+
+.cmdk-kbd {
+  padding: 2px 6px;
+  background: var(--surface-hover);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xs);
+  font-family: var(--font); font-size: 10px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+/* ── Daftar ──────────────────────────────────────────────────────────────── */
+.cmdk-list {
+  flex: 1; min-height: 0;
+  overflow-y: auto;
+  padding: var(--sp-2);
+}
+
+.cmdk-group {
+  padding: var(--sp-3) var(--sp-2) var(--sp-1);
+  font-size: 10px; color: var(--text-dim);
+  letter-spacing: var(--tracking-wide); text-transform: uppercase;
+}
+
+.cmdk-item {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm); color: var(--text-secondary);
+  cursor: pointer;
+  animation: riseIn var(--dur-2) var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 18ms);
+}
+.cmdk-item > .ti { font-size: var(--fs-md); color: var(--text-dim); flex-shrink: 0; }
+
+/* Hanya satu item aktif, digerakkan keyboard MAUPUN mouse — supaya tidak
+   pernah ada dua baris yang tampak terpilih sekaligus. */
+.cmdk-item[data-active='true'] {
+  background: var(--accent-bg);
+  color: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-border);
+}
+.cmdk-item[data-active='true'] > .ti { color: var(--accent); }
+
+.cmdk-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmdk-hint {
+  flex-shrink: 0; max-width: 45%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--fs-xs); color: var(--text-dim);
+}
+
+.cmdk-empty {
+  display: flex; align-items: center; justify-content: center; gap: var(--sp-2);
+  padding: var(--sp-7) var(--sp-4);
+  font-size: var(--fs-sm); color: var(--text-dim);
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+.cmdk-footer {
+  display: flex; align-items: center; gap: var(--sp-4);
+  flex-shrink: 0;
+  padding: var(--sp-2) var(--sp-4);
+  border-top: 1px solid var(--hairline);
+  font-size: var(--fs-xs); color: var(--text-dim);
+}
+.cmdk-footer span { display: flex; align-items: center; gap: var(--sp-1); }
+.cmdk-count { margin-left: auto; }

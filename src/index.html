@@ -1,9 +1,22 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>StudyAI</title>
+  <script>
+    // Anti-kedip: tema sebenarnya tersimpan di settings.json dan baru tiba
+    // lewat IPC (async). Cache di localStorage dipakai untuk mengecat frame
+    // pertama dengan tema yang benar; App.tsx menyegarkannya setelah muat.
+    (function () {
+      try {
+        var t = localStorage.getItem('studyai-theme');
+        document.documentElement.dataset.theme = (t === 'light') ? 'light' : 'dark';
+      } catch (e) {
+        document.documentElement.dataset.theme = 'dark';
+      }
+    })();
+  </script>
 </head>
 <body>
   <div id="root"></div>

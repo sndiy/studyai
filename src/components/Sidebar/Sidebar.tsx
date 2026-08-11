@@ -15,143 +15,148 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(diff / 604800)} minggu lalu`
 }
 
-// StudyAI Logo — menggunakan asset PNG asli
-function StudyAILogo({ size = 28 }: { size?: number }) {
-  return (
-    <img
-      src={logoUrl}
-      width={size}
-      height={size}
-      alt="StudyAI"
-      style={{ flexShrink: 0, borderRadius: 4, objectFit: 'contain' }}
-    />
-  )
-}
+const NAV_ITEMS: { id: View; icon: string; label: string }[] = [
+  { id: 'editor',   icon: 'ti-edit',     label: 'Editor' },
+  { id: 'ai',       icon: 'ti-sparkles', label: 'Tanya AI' },
+  { id: 'settings', icon: 'ti-settings', label: 'Pengaturan' },
+]
 
 export default function Sidebar() {
   const {
     currentView, setView,
     doc, openFile, newDoc,
     recentFiles, openRecent, removeRecent,
-    settings,
+    settings, sidebarCollapsed, toggleSidebar,
   } = useStore()
 
-  const navItems: { id: View; icon: string; label: string }[] = [
-    { id: 'editor', icon: 'ti-edit', label: 'Editor' },
-    { id: 'ai', icon: 'ti-sparkles', label: 'Tanya AI' },
-    { id: 'settings', icon: 'ti-settings', label: 'Pengaturan' },
-  ]
-
-  const activeModel = settings?.active_model ?? 'gemini-1.5-flash'
-  const hasKey = !!(settings?.gemini_api_key || settings?.openai_api_key)
+  const activeModel = settings?.active_model ?? 'gemini-2.0-flash'
+  // [S2] Renderer tidak lagi menerima API key — cukup tahu sudah terisi atau belum
+  const hasKey = !!(settings?.has_gemini_key || settings?.has_openai_key)
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
 
-      {/* Logo */}
+      {/* Logo + tombol lipat */}
       <div className="sidebar-top">
         <div className="logo-row">
-          <div className="logo-icon">
-            <StudyAILogo size={28} />
-          </div>
+          <img className="logo-icon" src={logoUrl} alt="" width={26} height={26} />
           <span className="logo-text">StudyAI</span>
-          <span className="logo-ver">v2.3.0</span>
+          <button
+            className="sidebar-toggle"
+            onClick={toggleSidebar}
+            data-tip={sidebarCollapsed ? 'Lebarkan sidebar' : 'Ciutkan sidebar'}
+            title={sidebarCollapsed ? 'Lebarkan sidebar' : 'Ciutkan sidebar'}
+            aria-label={sidebarCollapsed ? 'Lebarkan sidebar' : 'Ciutkan sidebar'}
+          >
+            <i className={`ti ${sidebarCollapsed ? 'ti-layout-sidebar-right-collapse' : 'ti-layout-sidebar-left-collapse'}`} />
+          </button>
         </div>
       </div>
 
       {/* Navigasi */}
-      <div className="nav-section">
+      <nav className="nav-section">
         <div className="nav-label">Navigasi</div>
-        {navItems.map(item => (
-          <div
+        {NAV_ITEMS.map((item, i) => (
+          <button
             key={item.id}
             className={`nav-item ${currentView === item.id ? 'active' : ''}`}
+            style={{ '--i': i } as React.CSSProperties}
             onClick={() => setView(item.id)}
+            data-tip={item.label}
           >
+            {/* Satu-satunya elemen pembawa view-transition-name: saat view
+                berganti, pil ini MELUNCUR dari item lama ke item baru. */}
+            {currentView === item.id && <span className="nav-pill" aria-hidden="true" />}
             <i className={`ti ${item.icon}`} />
-            <span>{item.label}</span>
-          </div>
+            <span className="nav-text">{item.label}</span>
+          </button>
         ))}
-      </div>
+      </nav>
 
       {/* Aksi file */}
-      <div className="nav-section" style={{ paddingTop: 4 }}>
+      <div className="nav-section">
         <div className="nav-label">File</div>
-        <div className="nav-item" onClick={newDoc}>
+        <button className="nav-item" onClick={newDoc} data-tip="Baru">
           <i className="ti ti-file-plus" />
-          <span>Baru</span>
-        </div>
-        <div className="nav-item" onClick={openFile}>
+          <span className="nav-text">Baru</span>
+        </button>
+        <button className="nav-item" onClick={openFile} data-tip="Buka File">
           <i className="ti ti-folder-open" />
-          <span>Buka File</span>
-        </div>
+          <span className="nav-text">Buka File</span>
+        </button>
       </div>
 
-      {/* File aktif */}
-      {doc && (
-        <div className="last-opened-section">
-          <div className="nav-label">File Aktif</div>
-          <div className={`note-card active`}>
-            <div className="note-card-title">
-              <i className="ti ti-file-text" />
-              <span className="note-card-title-text">{doc.title || 'Tanpa Judul'}</span>
-              {doc.isDirty && <span className="dirty-dot" title="Belum disimpan" />}
-            </div>
-            {doc.filePath && (
-              <div className="note-card-meta" style={{ fontSize: 10 }}>
-                <i className="ti ti-file-symlink" />
-                <span style={{ opacity: 0.6, wordBreak: 'break-all' }}>
-                  {doc.filePath.split(/[\\\/]/).pop()}
-                </span>
-              </div>
-            )}
-            {!doc.filePath && (
-              <div className="note-card-meta" style={{ fontSize: 10, color: 'var(--yellow)' }}>
-                <i className="ti ti-alert-circle" />
-                <span>Belum disimpan ke file</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Recent files */}
-      {recentFiles.length > 0 && (
-        <div className="last-opened-section" style={{ flex: 1, overflowY: 'auto' }}>
-          <div className="nav-label">Terakhir Dibuka</div>
-          {recentFiles.map(f => (
-            <div
-              key={f.path}
-              className={`note-card ${doc?.filePath === f.path ? 'active' : ''}`}
-              onClick={() => openRecent(f.path, f.title)}
-            >
+      {/* Satu region scroll untuk kedua daftar file. Sebelumnya dua section
+          sama-sama mengklaim flex:1 dan saling berebut tinggi. */}
+      <div className="sidebar-scroll">
+        {doc && (
+          <section className="file-section">
+            <div className="nav-label">File Aktif</div>
+            <div className="note-card active">
               <div className="note-card-title">
                 <i className="ti ti-file-text" />
-                <span className="note-card-title-text">{f.title || 'Tanpa Judul'}</span>
+                <span className="note-card-title-text">{doc.title || 'Tanpa Judul'}</span>
+                {doc.isDirty && <span className="dirty-dot" title="Belum disimpan" />}
               </div>
-              <div className="note-card-meta">
-                <i className="ti ti-clock" />
-                <span>{timeAgo(f.updatedAt)}</span>
-                <button
-                  className="recent-remove-btn"
-                  onClick={e => { e.stopPropagation(); removeRecent(f.path) }}
-                  title="Hapus dari daftar"
-                >
-                  <i className="ti ti-x" />
-                </button>
-              </div>
+              {doc.filePath ? (
+                <div className="note-card-meta">
+                  <i className="ti ti-file-symlink" />
+                  <span className="note-card-path">{doc.filePath.split(/[\\/]/).pop()}</span>
+                </div>
+              ) : (
+                <div className="note-card-meta warn">
+                  <i className="ti ti-alert-circle" />
+                  <span>Belum disimpan ke file</span>
+                </div>
+              )}
             </div>
-          ))}
-        </div>
-      )}
+          </section>
+        )}
+
+        {recentFiles.length > 0 && (
+          <section className="file-section">
+            <div className="nav-label">Terakhir Dibuka</div>
+            {recentFiles.map((f, i) => (
+              <div
+                key={f.path}
+                className={`note-card ${doc?.filePath === f.path ? 'active' : ''}`}
+                style={{ '--i': i } as React.CSSProperties}
+                onClick={() => openRecent(f.path, f.title)}
+              >
+                <div className="note-card-title">
+                  <i className="ti ti-file-text" />
+                  <span className="note-card-title-text">{f.title || 'Tanpa Judul'}</span>
+                </div>
+                <div className="note-card-meta">
+                  <i className="ti ti-clock" />
+                  <span>{timeAgo(f.updatedAt)}</span>
+                  <button
+                    className="recent-remove-btn"
+                    onClick={e => { e.stopPropagation(); removeRecent(f.path) }}
+                    title="Hapus dari daftar"
+                    aria-label={`Hapus ${f.title || 'file'} dari daftar`}
+                  >
+                    <i className="ti ti-x" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </section>
+        )}
+      </div>
 
       {/* Footer */}
       <div className="sidebar-footer">
-        <div className="provider-badge" onClick={() => setView('settings')}>
+        <button
+          className="provider-badge"
+          onClick={() => setView('settings')}
+          data-tip={activeModel}
+          title={activeModel}
+        >
           <span className={`provider-dot ${hasKey ? 'ok' : 'off'}`} />
           <span className="provider-name">{activeModel}</span>
-          <i className="ti ti-chevron-down provider-arrow" />
-        </div>
+          <i className="ti ti-chevron-right provider-arrow" />
+        </button>
       </div>
 
     </aside>

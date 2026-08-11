@@ -1,0 +1,205 @@
+/* ── tokens.css — sumber tunggal design token StudyAI ──────────────────────
+   Tema dipilih lewat data-theme di <html> (di-set lebih dulu oleh inline
+   script di index.html supaya tidak ada kedipan, lalu disinkronkan App.tsx).
+
+   Aturan main: komponen TIDAK BOLEH menulis nilai mentah (hex, px shadow,
+   z-index angka). Semua lewat token di sini — itu satu-satunya cara light
+   theme tetap utuh.
+   ────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── Brand duo-tone ────────────────────────────────────────────────────
+     Iris + mint diambil dari studyai-logo.svg. Kombinasi dua warna inilah
+     yang membuat app tidak terbaca sebagai template indigo generik. */
+  --iris:        #7c6af7;
+  --iris-bright: #9b8dff;
+  --mint:        #4fe3b0;
+
+  /* ── Spacing ─────────────────────────────────────────────────────────── */
+  --sp-1: 4px;   --sp-2: 8px;   --sp-3: 12px;  --sp-4: 16px;
+  --sp-5: 20px;  --sp-6: 24px;  --sp-7: 32px;  --sp-8: 40px;
+
+  /* ── Tipografi ───────────────────────────────────────────────────────── */
+  --fs-xs:   11px;
+  --fs-sm:   12px;
+  --fs-base: 13px;
+  --fs-md:   14px;
+  --fs-lg:   16px;
+  --fs-xl:   20px;
+  --fs-2xl:  28px;
+
+  --lh-tight:   1.3;
+  --lh-base:    1.6;
+  --lh-relaxed: 1.8;
+
+  --tracking-tight: -0.021em;
+  --tracking-wide:   0.08em;
+
+  /* Inter dimuat dari Google Fonts; sisanya rantai fallback yang tetap enak
+     dibaca saat offline (Segoe UI Variable ada di Windows 11). */
+  --font: 'Inter', 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', ui-monospace, monospace;
+
+  /* ── Radius ──────────────────────────────────────────────────────────── */
+  --r-xs: 4px;  --r-sm: 8px;  --r-md: 12px;  --r-lg: 16px;  --r-xl: 20px;
+  --r-full: 999px;
+
+  /* Alias lama — komponen yang belum dimigrasi tetap jalan */
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+
+  /* ── Motion ──────────────────────────────────────────────────────────── */
+  --dur-1: 120ms;  --dur-2: 180ms;  --dur-3: 260ms;  --dur-4: 420ms;
+
+  --ease-out:        cubic-bezier(.22, 1, .36, 1);
+  --ease-spring:     cubic-bezier(.34, 1.56, .64, 1);
+  --ease-emphasized: cubic-bezier(.2, 0, 0, 1);
+
+  /* ── Z-index ─────────────────────────────────────────────────────────── */
+  --z-aurora:   0;
+  --z-content:  1;
+  --z-sticky:   100;
+  --z-popover:  300;
+  --z-titlebar: 400;
+  --z-modal:    600;
+  --z-toast:    700;
+
+  /* Diturunkan oleh App saat user mengetik (lihat app.css) */
+  --aurora-opacity: 1;
+}
+
+/* ══ DARK — default ═══════════════════════════════════════════════════════ */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* Permukaan — semantik, bukan numerik.
+     chrome  = tembus pandang, aurora boleh terlihat
+     canvas  = OPAQUE, tempat teks dibaca/ditulis, aurora tidak pernah tembus */
+  --surface-app:          #08080e;
+  --surface-chrome:       rgba(20, 20, 33, 0.62);
+  --surface-chrome-solid: #12121d;
+  --surface-canvas:       #0e0e17;
+  --surface-raised:       #191929;
+  --surface-hover:        #202032;
+  --surface-inset:        #0b0b13;
+  --surface-overlay:      rgba(10, 10, 18, 0.62);
+
+  --hairline:        rgba(255, 255, 255, 0.075);
+  --hairline-strong: rgba(255, 255, 255, 0.13);
+
+  --text-primary:   #f2f2f7;
+  --text-secondary: #cfcfe0;
+  --text-muted:     #8d8daa;
+  --text-dim:       #5e5e78;
+
+  --accent:        var(--iris);
+  --accent-soft:   #a99cff;
+  --accent-bg:     rgba(124, 106, 247, 0.14);
+  --accent-border: rgba(124, 106, 247, 0.34);
+  --accent-glow:   rgba(124, 106, 247, 0.30);
+  --accent-ring:   rgba(124, 106, 247, 0.35);
+  --accent-hover:  #6a58e8;
+  --on-accent:     #ffffff;
+
+  --green:     #46d9a0;
+  --green-bg:  rgba(70, 217, 160, 0.12);
+  --green-border: rgba(70, 217, 160, 0.30);
+  --yellow:    #f0be3c;
+  --yellow-bg: rgba(240, 190, 60, 0.12);
+  --yellow-border: rgba(240, 190, 60, 0.28);
+  --red:       #f0716f;
+  --red-bg:    rgba(240, 113, 111, 0.12);
+  --red-border:rgba(240, 113, 111, 0.30);
+  --code:      #e0956a;
+  --dot-off:   #3a3a4a;
+
+  --gradient-brand: linear-gradient(135deg, var(--iris-bright) 0%, var(--iris) 55%, #6d5ce0 100%);
+  --gradient-text:  linear-gradient(115deg, #ffffff 0%, var(--iris-bright) 45%, var(--mint) 100%);
+
+  --elev-1: 0 1px 2px rgba(0,0,0,.40), inset 0 1px 0 rgba(255,255,255,.04);
+  --elev-2: 0 4px 14px rgba(0,0,0,.44), inset 0 1px 0 rgba(255,255,255,.05);
+  --elev-3: 0 14px 34px rgba(0,0,0,.50), inset 0 1px 0 rgba(255,255,255,.06);
+  --elev-4: 0 28px 68px rgba(0,0,0,.60), inset 0 1px 0 rgba(255,255,255,.07);
+
+  --scrim: rgba(4, 4, 9, 0.62);
+
+  --aurora-1: rgba(124, 106, 247, 0.30);
+  --aurora-2: rgba(79, 227, 176, 0.15);
+  --aurora-3: rgba(155, 141, 255, 0.20);
+
+  --selection: rgba(124, 106, 247, 0.28);
+}
+
+/* ══ LIGHT ════════════════════════════════════════════════════════════════ */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --surface-app:          #eceef6;
+  --surface-chrome:       rgba(255, 255, 255, 0.66);
+  --surface-chrome-solid: #f7f8fc;
+  --surface-canvas:       #ffffff;
+  --surface-raised:       #ffffff;
+  --surface-hover:        #f0f1f8;
+  --surface-inset:        #f5f6fb;
+  --surface-overlay:      rgba(255, 255, 255, 0.66);
+
+  --hairline:        rgba(18, 20, 48, 0.10);
+  --hairline-strong: rgba(18, 20, 48, 0.17);
+
+  --text-primary:   #14141d;
+  --text-secondary: #3a3a4b;
+  --text-muted:     #6b6b80;
+  --text-dim:       #9797ac;
+
+  --accent:        #6a57e8;
+  --accent-soft:   #5442d4;
+  --accent-bg:     rgba(106, 87, 232, 0.10);
+  --accent-border: rgba(106, 87, 232, 0.28);
+  --accent-glow:   rgba(106, 87, 232, 0.22);
+  --accent-ring:   rgba(106, 87, 232, 0.28);
+  --accent-hover:  #5744d6;
+  --on-accent:     #ffffff;
+
+  --green:     #0e9d76;
+  --green-bg:  rgba(14, 157, 118, 0.10);
+  --green-border: rgba(14, 157, 118, 0.28);
+  --yellow:    #b3771a;
+  --yellow-bg: rgba(179, 119, 26, 0.10);
+  --yellow-border: rgba(179, 119, 26, 0.26);
+  --red:       #d4453f;
+  --red-bg:    rgba(212, 69, 63, 0.09);
+  --red-border:rgba(212, 69, 63, 0.26);
+  --code:      #b45309;
+  --dot-off:   #c2c2d0;
+
+  --gradient-brand: linear-gradient(135deg, #8878ff 0%, #6a57e8 55%, #5442d4 100%);
+  --gradient-text:  linear-gradient(115deg, #1a1a28 0%, #6a57e8 50%, #0e9d76 100%);
+
+  --elev-1: 0 1px 2px rgba(22, 24, 56, .06);
+  --elev-2: 0 4px 14px rgba(22, 24, 56, .08);
+  --elev-3: 0 14px 34px rgba(22, 24, 56, .10);
+  --elev-4: 0 28px 62px rgba(22, 24, 56, .14);
+
+  --scrim: rgba(26, 28, 56, 0.28);
+
+  --aurora-1: rgba(124, 106, 247, 0.24);
+  --aurora-2: rgba(16, 185, 129, 0.16);
+  --aurora-3: rgba(99, 102, 241, 0.16);
+
+  --selection: rgba(106, 87, 232, 0.20);
+}
+
+/* ── Alias kompatibilitas ──────────────────────────────────────────────────
+   Nama lama masih dipakai banyak CSS komponen. Dipetakan ke ladder baru
+   supaya migrasi bisa bertahap tanpa ada tahap yang tampilannya rusak. */
+:root {
+  --bg-base:     var(--surface-app);
+  --bg-surface:  var(--surface-chrome-solid);
+  --bg-elevated: var(--surface-raised);
+  --bg-overlay:  var(--surface-hover);
+  --border:      var(--hairline);
+  --border-sub:  var(--hairline-strong);
+  --shadow:      var(--elev-2);
+}

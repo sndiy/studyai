@@ -1,120 +1,200 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-:root {
-  /* Default Dark Theme (Existing) */
-  --bg-base:    #0b0b0f;
-  --bg-surface: #10101a;
-  --bg-elevated:#161622;
-  --bg-overlay: #1a1a28;
-  --border:     #1e1e2e;
-  --border-sub: #2a2a3a;
-  --text-primary:   #f0f0f5;
-  --text-secondary: #d1d1e0;
-  --text-muted:     #8a8aa8;
-  --text-dim:       #5a5a75;
-  --accent:    #7c6af7;
-  --accent-soft:#a89cf7;
-  --accent-bg: #1e1a3a;
-  --accent-border: #3a3060;
-  --green:     #48c896;
-  --green-bg:  #141a14;
-  --yellow:    #f0be3c;
-  --red:       #e05555;
-  --code:      #e0956a;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --font: 'Inter', system-ui, sans-serif;
-  --font-mono: 'Consolas', 'JetBrains Mono', monospace;
-  
-  --shadow: 0 4px 12px rgba(0,0,0,0.3);
-}
+/* ── global.css — reset + elemen dasar + komponen global ───────────────────
+   Token sudah pindah ke tokens.css, keyframe ke motion.css, tipografi konten
+   ke prose.css. File ini hanya menyimpan yang benar-benar lintas-komponen.
+   ────────────────────────────────────────────────────────────────────────── */
 
-.light-theme {
-  --bg-base:    #f4f4f9;
-  --bg-surface: #ffffff;
-  --bg-elevated:#fdfdfd;
-  --bg-overlay: #f0f0f5;
-  --border:     #e2e2e9;
-  --border-sub: #d1d1d9;
-  --text-primary:   #1a1a20;
-  --text-secondary: #3a3a45;
-  --text-muted:     #6a6a75;
-  --text-dim:       #9a9aa5;
-  --accent:    #6366f1;
-  --accent-soft:#4f46e5;
-  --accent-bg: #eef2ff;
-  --accent-border: #c7d2fe;
-  --green:     #10b981;
-  --green-bg:  #ecfdf5;
-  --yellow:    #f59e0b;
-  --red:       #ef4444;
-  --code:      #b45309;
-  
-  --shadow: 0 4px 12px rgba(0,0,0,0.08);
-}
-
-* { margin:0; padding:0; box-sizing:border-box; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
 html, body, #root {
   height: 100%;
   width: 100%;
-  background: var(--bg-base);
+  overflow: hidden;
+  background: var(--surface-app);
   color: var(--text-primary);
   font-family: var(--font);
-  overflow: hidden;
+  font-size: var(--fs-base);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-::-webkit-scrollbar { width: 3px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-sub); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+/* Warna tema berganti dengan lembut untuk elemen yang tidak ikut tersapu
+   View Transition (mis. saat reduced-motion aktif). */
+body { transition: background-color var(--dur-3) var(--ease-out); }
 
-button { font-family: var(--font); cursor: pointer; border: none; outline: none; transition: transform 0.1s ease; }
-button:active:not(:disabled) { transform: scale(0.97); }
-input, textarea { font-family: var(--font); outline: none; border: none; }
-input:focus-visible, textarea:focus-visible {
-  box-shadow: 0 0 0 2px var(--accent-bg), 0 0 0 3px var(--accent-border);
+::selection { background: var(--selection); }
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+/* 3px sebelumnya nyaris tidak bisa ditangkap kursor. Trik border transparan
+   memberi target klik yang layak tanpa menambah bobot visual. */
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+  border: 3px solid transparent;
+  border-radius: var(--r-full);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); background-clip: content-box; }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* ── Elemen dasar ────────────────────────────────────────────────────────── */
+button {
+  font-family: var(--font);
+  cursor: pointer;
+  border: none;
+  outline: none;
+  color: inherit;
+  background: none;
+  transition: transform var(--dur-1) var(--ease-out);
+}
+button:active:not(:disabled) { transform: scale(.97); }
+button:disabled { cursor: default; }
+
+input, textarea, select { font-family: var(--font); outline: none; border: none; }
+
+:focus-visible { outline: none; }
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  box-shadow: 0 0 0 3px var(--accent-bg), 0 0 0 1px var(--accent-border);
+}
+button:focus-visible {
+  box-shadow: 0 0 0 3px var(--accent-bg), 0 0 0 1px var(--accent-border);
+}
+
+/* ── Tombol ──────────────────────────────────────────────────────────────── */
+.btn-primary,
+.btn-secondary,
+.btn-danger,
+.btn-save-file {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background var(--dur-2) var(--ease-out),
+              color var(--dur-2) var(--ease-out),
+              border-color var(--dur-2) var(--ease-out),
+              box-shadow var(--dur-2) var(--ease-out),
+              transform var(--dur-1) var(--ease-out);
 }
 
 .btn-primary {
-  display: flex; align-items: center; gap: 6px;
-  padding: 8px 16px;
-  background: var(--accent); border-radius: var(--radius-md);
-  font-size: 12.5px; font-weight: 500; color: #fff;
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--elev-1);
 }
-.btn-secondary {
-  display: flex; align-items: center; gap: 6px;
-  padding: 7px 12px;
-  background: var(--bg-elevated); border: 0.5px solid var(--border-sub);
-  border-radius: var(--radius-md); font-size: 12px; color: var(--text-muted);
-}
-.btn-danger {
-  display: flex; align-items: center; gap: 5px;
-  padding: 7px 12px;
-  background: #1e1218; border: 0.5px solid #3a1e22;
-  border-radius: var(--radius-md); font-size: 12px; color: var(--red);
-}
-.btn-primary:hover  { background: #6a58e8; }
-.btn-secondary:hover { background: var(--bg-overlay); color: var(--text-secondary); }
-.btn-save-file {
-  display: flex; align-items: center; gap: 6px;
-  padding: 8px 18px;
-  background: linear-gradient(135deg, #9b8dff, #7c6af7);
-  border: none; border-radius: var(--radius-md);
-  font-size: 12.5px; font-weight: 600; color: #fff;
-  cursor: pointer; transition: all 0.2s ease;
-  box-shadow: 0 0 12px #9b8dff55;
-}
-.btn-save-file:hover { background: linear-gradient(135deg, #b3a6ff, #8878ff); box-shadow: 0 0 18px #9b8dff88; transform: translateY(-1px); }
-.btn-save-file:active { background: linear-gradient(135deg, #7c6af7, #6a58e8); transform: translateY(0); }
+.btn-primary:hover { background: var(--accent-hover); box-shadow: 0 4px 16px var(--accent-glow); }
 
-/* ── View Transition Utility ───────────────────────────────────────────── */
-.main-area > * {
-  animation: viewFadeIn 0.2s ease;
+.btn-secondary {
+  padding: 7px var(--sp-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  color: var(--text-muted);
 }
-@keyframes viewFadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+.btn-secondary:hover {
+  background: var(--surface-hover);
+  border-color: var(--hairline-strong);
+  color: var(--text-secondary);
 }
+
+/* Dulu hardcode #1e1218 / #3a1e22 — tidak terbaca sama sekali di light theme */
+.btn-danger {
+  padding: 7px var(--sp-3);
+  background: var(--red-bg);
+  border: 1px solid var(--red-border);
+  color: var(--red);
+}
+.btn-danger:hover { background: var(--red-bg); border-color: var(--red); }
+
+/* Tombol simpan — satu-satunya elemen dengan gradient brand penuh. */
+.btn-save-file {
+  position: relative;
+  overflow: hidden;
+  padding: var(--sp-2) var(--sp-5);
+  background: var(--gradient-brand);
+  color: var(--on-accent);
+  font-weight: 600;
+  box-shadow: 0 2px 14px var(--accent-glow);
+}
+/* Kilau menyapu saat hover */
+.btn-save-file::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,.28) 50%, transparent 65%);
+  transform: translateX(-120%);
+  transition: transform var(--dur-4) var(--ease-out);
+}
+.btn-save-file:hover { transform: translateY(-1px); box-shadow: 0 6px 22px var(--accent-glow); }
+.btn-save-file:hover::after { transform: translateX(120%); }
+.btn-save-file:active { transform: translateY(0) scale(.98); }
+.btn-save-file:disabled { opacity: .55; box-shadow: none; }
+.btn-save-file:disabled:hover { transform: none; }
+
+/* Ikon berganti ke centang setelah berhasil menyimpan */
+.btn-save-file.saved { background: linear-gradient(135deg, var(--green), var(--mint)); }
+.btn-save-file.saved .ti { animation: pop var(--dur-3) var(--ease-spring) both; }
+
+/* ── Overlay / modal ─────────────────────────────────────────────────────── */
+.open-external-overlay {
+  position: fixed; inset: 0;
+  z-index: var(--z-modal);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--scrim);
+  backdrop-filter: blur(6px);
+  animation: fadeIn var(--dur-2) var(--ease-out) both;
+}
+.open-external-card {
+  width: 380px; max-width: calc(100vw - var(--sp-8));
+  padding: var(--sp-6);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  box-shadow: var(--elev-4);
+  animation: pop var(--dur-3) var(--ease-spring) both;
+}
+.open-external-title {
+  display: flex; align-items: center; gap: var(--sp-2);
+  font-size: var(--fs-md); font-weight: 600;
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-primary);
+}
+.open-external-title .ti { color: var(--yellow); font-size: var(--fs-lg); }
+.open-external-body {
+  margin-top: var(--sp-3);
+  font-size: var(--fs-sm); line-height: var(--lh-base);
+  color: var(--text-muted);
+}
+.open-external-body strong { color: var(--text-secondary); }
+.open-external-actions {
+  display: flex; justify-content: flex-end; gap: var(--sp-2);
+  margin-top: var(--sp-5); flex-wrap: wrap;
+}
+
+/* ── Toast ───────────────────────────────────────────────────────────────── */
+.app-toast {
+  position: fixed; bottom: var(--sp-6); left: 50%;
+  z-index: var(--z-toast);
+  max-width: min(560px, calc(100vw - var(--sp-8)));
+  display: flex; align-items: flex-start; gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  box-shadow: var(--elev-3);
+  font-size: var(--fs-sm); line-height: var(--lh-base);
+  color: var(--text-secondary);
+  cursor: pointer;
+  animation: toastIn var(--dur-3) var(--ease-spring) both;
+}
+.app-toast.leaving { animation: toastOut var(--dur-2) var(--ease-out) both; }
+.app-toast.err { border-color: var(--red-border); }
+.app-toast.err > .ti:first-child { color: var(--red); }
+.app-toast.ok  { border-color: var(--green-border); }
+.app-toast.ok  > .ti:first-child { color: var(--green); }
+.app-toast .ti { flex-shrink: 0; margin-top: 1px; font-size: var(--fs-md); }
+.app-toast-close { margin-left: var(--sp-1); opacity: .45; transition: opacity var(--dur-1); }
+.app-toast:hover .app-toast-close { opacity: 1; }

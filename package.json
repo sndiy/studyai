@@ -1,6 +1,6 @@
 {
   "name": "studyai",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "StudyAI — Desktop Study Assistant with AI",
   "main": "out/main/index.js",
   "scripts": {
@@ -14,7 +14,11 @@
   "dependencies": {
     "@tiptap/extension-color": "^3.23.6",
     "@tiptap/extension-highlight": "^3.23.6",
+    "@tiptap/extension-image": "^3.23.6",
     "@tiptap/extension-placeholder": "^3.23.6",
+    "@tiptap/extension-table": "^3.23.6",
+    "@tiptap/extension-task-item": "^3.23.6",
+    "@tiptap/extension-task-list": "^3.23.6",
     "@tiptap/extension-text-align": "^3.23.6",
     "@tiptap/extension-text-style": "^3.23.6",
     "@tiptap/extension-underline": "^3.23.6",
@@ -23,7 +27,8 @@
     "@tiptap/starter-kit": "^3.23.6",
     "dompurify": "^3.4.10",
     "marked": "^12.0.0",
-    "turndown": "^7.2.4"
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2"
   },
   "devDependencies": {
     "@types/dompurify": "^3.0.5",
@@ -50,6 +55,14 @@
     "files": [
       "out/**/*",
       "resources/**/*"
+    ],
+    "fileAssociations": [
+      {
+        "ext": "md",
+        "name": "Markdown Document",
+        "description": "Markdown Document",
+        "role": "Editor"
+      }
     ],
     "win": {
       "target": "nsis",

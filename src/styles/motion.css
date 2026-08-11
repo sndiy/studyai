@@ -1,0 +1,149 @@
+/* ── motion.css — semua keyframe & aturan View Transition ──────────────────
+   Satu tempat untuk seluruh gerak di app. Sebelumnya 13 keyframe tersebar di
+   5 file dengan `spin` 3x dan `toastIn` 2x.
+
+   Wajib: apa pun yang ditambahkan di sini harus ikut dinetralkan oleh blok
+   prefers-reduced-motion di bagian paling bawah.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* ── Primitif ────────────────────────────────────────────────────────────── */
+@keyframes spin      { to { transform: rotate(360deg); } }
+@keyframes fadeIn    { from { opacity: 0; } to { opacity: 1; } }
+
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pop {
+  from { opacity: 0; transform: scale(.94) translateY(6px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(18px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes barIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Toast — masuk DAN keluar (sebelumnya hanya punya animasi masuk) ─────── */
+@keyframes toastIn {
+  from { opacity: 0; transform: translate(-50%, 14px) scale(.96); }
+  to   { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+@keyframes toastOut {
+  from { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  to   { opacity: 0; transform: translate(-50%, 10px) scale(.97); }
+}
+
+/* ── Status AI ───────────────────────────────────────────────────────────── */
+/* Cincin yang memuai — dipakai avatar saat streaming */
+@keyframes breathe {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-ring); }
+  50%      { box-shadow: 0 0 0 7px transparent; }
+}
+
+/* Kilau berjalan — pengganti kursor berkedip saat teks sedang mengalir */
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+/* Caret streaming — berdenyut lembut, bukan berkedip step-end */
+@keyframes caretPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .25; }
+}
+
+@keyframes typingDot {
+  0%, 80%, 100% { opacity: .3; transform: scale(.8); }
+  40%           { opacity: 1;  transform: scale(1.1); }
+}
+
+/* ── Aurora ──────────────────────────────────────────────────────────────── */
+/* Hanya transform + opacity supaya tetap di compositor, bukan main thread. */
+@keyframes auroraDrift {
+  0%   { transform: translate3d(0, 0, 0)         scale(1); }
+  50%  { transform: translate3d(2.5%, -2%, 0)    scale(1.09); }
+  100% { transform: translate3d(-2%, 2.5%, 0)    scale(1.04); }
+}
+
+/* ── Ilustrasi empty state ───────────────────────────────────────────────── */
+@keyframes floatY {
+  from { transform: translateY(-3px); }
+  to   { transform: translateY(3px); }
+}
+@keyframes orbPulse {
+  0%, 100% { transform: scale(1);    opacity: .16; }
+  50%      { transform: scale(1.12); opacity: .28; }
+}
+@keyframes sparkle {
+  0%, 100% { transform: scale(.7) rotate(0deg);    opacity: .35; }
+  50%      { transform: scale(1.1) rotate(90deg);  opacity: 1; }
+}
+
+/* ── Utility ─────────────────────────────────────────────────────────────── */
+.spin    { display: inline-block; animation: spin 1s linear infinite; }
+.u-rise  { animation: riseIn var(--dur-3) var(--ease-out) both; }
+.u-pop   { animation: pop var(--dur-2) var(--ease-spring) both; }
+.u-fade  { animation: fadeIn var(--dur-2) var(--ease-out) both; }
+
+/* Stagger: elemen menyetel --i, delay-nya dihitung di sini. */
+.u-stagger { animation-delay: calc(var(--i, 0) * 40ms); }
+
+/* ══ View Transitions ═════════════════════════════════════════════════════
+   Electron 30 = Chromium 124, jadi API-nya tersedia. Tetap ada feature-guard
+   di src/lib/viewTransition.ts untuk jaga-jaga.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Hanya area konten yang berganti — sidebar & titlebar tetap diam.
+   Dinonaktifkan saat ganti tema, karena di sana justru seluruh root yang
+   harus tersapu sebagai satu kesatuan. */
+:root:not(.vt-theme) .main-area { view-transition-name: main-view; }
+
+::view-transition-old(main-view) {
+  animation: vtOut var(--dur-2) var(--ease-out) both;
+}
+::view-transition-new(main-view) {
+  animation: vtIn var(--dur-3) var(--ease-out) both;
+}
+@keyframes vtOut {
+  to { opacity: 0; transform: translateY(-6px) scale(.995); }
+}
+@keyframes vtIn {
+  from { opacity: 0; transform: translateY(10px) scale(.995); }
+}
+
+/* Ganti tema — sapuan melingkar dari titik klik.
+   --vt-x/--vt-y/--vt-r di-set oleh withViewTransition(). */
+:root.vt-theme::view-transition-old(root) {
+  animation: none;
+  z-index: 0;
+}
+:root.vt-theme::view-transition-new(root) {
+  animation: themeReveal 560ms var(--ease-emphasized) both;
+  z-index: 1;
+}
+@keyframes themeReveal {
+  from { clip-path: circle(0 at var(--vt-x, 50%) var(--vt-y, 50%)); }
+  to   { clip-path: circle(var(--vt-r, 150vmax) at var(--vt-x, 50%) var(--vt-y, 50%)); }
+}
+
+/* ══ Reduced motion ═══════════════════════════════════════════════════════
+   App ini sebelumnya sama sekali tidak menghormati preferensi ini. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* Aurora berhenti total, bukan sekadar dipercepat */
+  .app-shell::before { animation: none !important; }
+  /* Spinner tetap butuh berputar supaya "sedang memproses" tetap terbaca */
+  .spin { animation: spin 1.4s linear infinite !important; }
+}

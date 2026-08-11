@@ -1,0 +1,173 @@
+/* ── prose.css — tipografi konten kaya ─────────────────────────────────────
+   Sebelumnya `.md-preview` didefinisikan DUA KALI dengan nilai berbeda
+   (Chat.css 13px/1.75 vs Editor.css 13.5px/1.8) dan keduanya global, jadi
+   urutan muat yang menentukan pemenangnya — chat diam-diam memakai ukuran
+   editor. Sekarang satu definisi untuk tiga permukaan sekaligus:
+
+     .md-preview                  → markdown terender (chat + preview)
+     .tiptap-editor-content       → TipTap
+     .wysiwyg-pane .ProseMirror   → TipTap saat di dalam pane editor
+
+   Ukuran diatur lewat --prose-fs supaya bubble chat bisa mengecil tanpa
+   menduplikasi satu pun aturan.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.md-preview,
+.tiptap-editor-content,
+.wysiwyg-pane .ProseMirror {
+  --prose-fs: var(--fs-base);
+  font-family: var(--font);
+  font-size: var(--prose-fs);
+  line-height: var(--lh-relaxed);
+  color: var(--text-secondary);
+  word-break: break-word;
+}
+
+/* Bubble chat sedikit lebih rapat daripada kanvas menulis */
+.bubble .md-preview { --prose-fs: var(--fs-base); line-height: 1.72; }
+
+/* ── Heading ─────────────────────────────────────────────────────────────── */
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) :is(h1, h2, h3, h4, h5, h6) {
+  color: var(--text-primary);
+  font-weight: 600;
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+  margin: 1.15em 0 .4em;
+}
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) h1 {
+  font-size: calc(var(--prose-fs) + 6.5px);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--hairline);
+}
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) h2 { font-size: calc(var(--prose-fs) + 3.5px); }
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) h3 { font-size: calc(var(--prose-fs) + 1.5px); }
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) :is(h4, h5, h6) { font-size: var(--prose-fs); }
+
+/* Anak LANGSUNG saja — `:first-child` tanpa `>` juga mengenai elemen inline
+   yang kebetulan anak pertama di dalam paragraf. */
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) > :first-child { margin-top: 0; }
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) > :last-child  { margin-bottom: 0; }
+
+/* ── Blok teks ───────────────────────────────────────────────────────────── */
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) p { margin: .5em 0; }
+
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) strong {
+  color: var(--text-primary); font-weight: 600;
+}
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) em {
+  color: var(--accent-soft); font-style: italic;
+}
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) u {
+  text-decoration-color: var(--accent-soft); text-underline-offset: 2px;
+}
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) s { color: var(--text-dim); }
+
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) :is(ul, ol) {
+  padding-left: var(--sp-5); margin: .4em 0;
+}
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) li { margin: .2em 0; }
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) li::marker { color: var(--accent-soft); }
+
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) blockquote {
+  margin: .8em 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-left: 2px solid var(--accent);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  background: var(--accent-bg);
+  color: var(--text-muted);
+}
+
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) hr {
+  border: none; border-top: 1px solid var(--hairline); margin: 1.2em 0;
+}
+
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) a {
+  color: var(--accent-soft); text-decoration: none;
+  border-bottom: 1px solid var(--accent-border);
+  transition: border-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) a:hover {
+  color: var(--accent); border-bottom-color: var(--accent);
+}
+
+/* ── Kode ────────────────────────────────────────────────────────────────── */
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) code {
+  font-family: var(--font-mono);
+  font-size: calc(var(--prose-fs) - 0.5px);
+  color: var(--code);
+  background: var(--surface-inset);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xs);
+  padding: 1px 5px;
+}
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) pre {
+  margin: .8em 0;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-inset);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  overflow-x: auto;
+}
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) pre code {
+  background: none; border: none; padding: 0; color: var(--text-secondary);
+}
+
+/* ── Tabel ───────────────────────────────────────────────────────────────── */
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) table {
+  width: 100%; margin: .8em 0;
+  border-collapse: collapse;
+  font-size: calc(var(--prose-fs) - 0.5px);
+  overflow: hidden;
+}
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) :is(th, td) {
+  border: 1px solid var(--hairline);
+  padding: var(--sp-2) var(--sp-3);
+  text-align: left;
+}
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) th {
+  background: var(--surface-inset); color: var(--text-primary); font-weight: 600;
+}
+
+/* ── Gambar ──────────────────────────────────────────────────────────────── */
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) img {
+  max-width: 100%; height: auto;
+  margin: .5em 0;
+  border-radius: var(--r-md);
+  border: 1px solid var(--hairline);
+}
+
+/* ── Task list ───────────────────────────────────────────────────────────── */
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) ul[data-type='taskList'] {
+  padding-left: 0; list-style: none;
+}
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) ul[data-type='taskList'] li {
+  display: flex; align-items: flex-start; gap: var(--sp-2);
+}
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) ul[data-type='taskList'] li > label {
+  margin-top: .3em; user-select: none;
+}
+:is(.md-preview, .tiptap-editor-content, .wysiwyg-pane .ProseMirror) ul[data-type='taskList'] li > div {
+  flex: 1; min-width: 0;
+}
+/* Preview chat memakai <input disabled> polos dari marked, bukan struktur data-type TipTap */
+.md-preview li input[type='checkbox'] { margin-right: var(--sp-1); }
+
+/* ── Khusus TipTap ───────────────────────────────────────────────────────── */
+.tiptap-editor-content,
+.wysiwyg-pane .ProseMirror {
+  outline: none;
+  min-height: 200px;
+  caret-color: var(--accent);
+}
+
+.wysiwyg-pane .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--text-dim);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+
+.wysiwyg-pane .ProseMirror mark { border-radius: 3px; padding: 0 3px; }
+
+.tiptap-readonly { pointer-events: none; user-select: text; }

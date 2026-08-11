@@ -1,0 +1,107 @@
+/* ── Titlebar.css ─────────────────────────────────────────────────────────
+   Window frameless: SELURUH bilah ini adalah area seret. Setiap anak yang bisa
+   diklik wajib memakai -webkit-app-region: no-drag, kalau tidak klik akan
+   ditelan oleh gerakan seret window.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.titlebar {
+  position: relative;
+  z-index: var(--z-titlebar);
+  flex-shrink: 0;
+  display: flex; align-items: center;
+  height: 38px;
+  padding-left: var(--sp-3);
+  background: var(--surface-chrome);
+  border-bottom: 1px solid var(--hairline);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+/* ── Brand ───────────────────────────────────────────────────────────────── */
+.titlebar-brand {
+  display: flex; align-items: center; gap: var(--sp-2);
+  flex-shrink: 0;
+}
+.titlebar-logo {
+  width: 18px; height: 18px;
+  border-radius: var(--r-xs);
+  object-fit: contain;
+}
+.titlebar-app {
+  font-size: var(--fs-sm); font-weight: 600;
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-secondary);
+}
+
+/* ── Judul dokumen ───────────────────────────────────────────────────────── */
+/* Absolut supaya benar-benar di tengah window, tidak bergeser mengikuti lebar
+   brand atau jumlah tombol. */
+.titlebar-doc {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: var(--sp-2);
+  max-width: min(46%, 520px);
+  pointer-events: none;
+}
+.titlebar-doc-title {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--fs-xs); color: var(--text-dim);
+}
+.titlebar-dot {
+  width: 6px; height: 6px; flex-shrink: 0;
+  border-radius: var(--r-full);
+  background: var(--yellow);
+  box-shadow: 0 0 6px var(--yellow);
+  animation: breathe 2.4s var(--ease-emphasized) infinite;
+  --accent-ring: var(--yellow);
+}
+
+/* ── Kontrol window ──────────────────────────────────────────────────────── */
+.titlebar-controls {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 2px;
+  padding: 0 var(--sp-2);
+  -webkit-app-region: no-drag;
+}
+
+/* Chip pemicu command palette — sekaligus mengiklankan shortcut-nya */
+.titlebar-cmdk {
+  display: flex; align-items: center; gap: var(--sp-2);
+  height: 24px;
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-full);
+  border: 1px solid var(--hairline);
+  background: var(--surface-hover);
+  color: var(--text-dim);
+  transition: background var(--dur-2) var(--ease-out),
+              color var(--dur-2) var(--ease-out),
+              border-color var(--dur-2) var(--ease-out);
+}
+.titlebar-cmdk:hover {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+  color: var(--accent-soft);
+}
+.titlebar-cmdk .ti { font-size: var(--fs-sm); }
+.titlebar-cmdk kbd {
+  font-family: var(--font); font-size: 9.5px; letter-spacing: .02em;
+  opacity: .85;
+}
+
+.titlebar-sep {
+  width: 1px; height: 16px;
+  margin: 0 var(--sp-2);
+  background: var(--hairline-strong);
+}
+
+.titlebar-win-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 26px;
+  border-radius: var(--r-xs);
+  color: var(--text-dim);
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.titlebar-win-btn .ti { font-size: var(--fs-sm); }
+.titlebar-win-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
+.titlebar-win-btn:active:not(:disabled) { transform: none; }   /* kontrol window tidak ikut memantul */
+.titlebar-win-btn.danger:hover { background: var(--red); color: #fff; }

@@ -1,68 +1,143 @@
-/* ── app.css — Layout shell ──────────────────────────────────────────────── */
+/* ── app.css — cangkang layout + lapisan aurora ────────────────────────────
+   Prinsip: aurora adalah CHROME, bukan KONTEN.
+   Ia hanya terlihat menembus sidebar, titlebar, dan celah di sekeliling
+   lembar kerja. Permukaan baca/tulis selalu opaque supaya teks tetap tenang.
+   ────────────────────────────────────────────────────────────────────────── */
 
 .app-shell {
+  position: relative;
   display: flex; flex-direction: column;
-  height: 100vh; width: 100vw; overflow: hidden;
+  height: 100vh; width: 100vw;
+  overflow: hidden;
+  background: var(--surface-app);
+  isolation: isolate;
 }
 
-.app-body  { display: flex; flex: 1; overflow: hidden; height: 100%; }
-.main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-base); }
+/* Lapisan aurora — tiga blob radial yang hanyut sangat pelan.
+   Murni transform + opacity, jadi tetap ditangani compositor. */
+.app-shell::before {
+  content: '';
+  position: absolute; inset: -25%;
+  z-index: var(--z-aurora);
+  pointer-events: none;
+  opacity: var(--aurora-opacity);
+  background:
+    radial-gradient(38% 42% at 14% 16%, var(--aurora-1) 0%, transparent 70%),
+    radial-gradient(32% 38% at 86% 10%, var(--aurora-2) 0%, transparent 70%),
+    radial-gradient(48% 52% at 64% 98%, var(--aurora-3) 0%, transparent 72%);
+  filter: blur(34px) saturate(118%);
+  animation: auroraDrift 46s var(--ease-emphasized) infinite alternate;
+  transition: opacity var(--dur-4) var(--ease-out);
+  will-change: transform;
+}
 
-/* ── Editor layout ───────────────────────────────────────────────────────── */
-.editor-layout  { display: flex; flex-direction: column; height: 100%; }
-.editor-content { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+/* Calm focus — saat user sedang mengetik, aurora meredup dan berhenti.
+   Atribut ini di-set Editor lewat DOM langsung, tanpa re-render React. */
+:root[data-writing='true'] .app-shell::before {
+  opacity: .22;
+  animation-play-state: paused;
+}
 
-/* Panel chat kanan di editor */
+.app-body {
+  position: relative; z-index: var(--z-content);
+  display: flex; flex: 1;
+  overflow: hidden; min-height: 0;
+}
+
+.main-area {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  background: transparent;
+}
+
+/* ── Layout editor ───────────────────────────────────────────────────────── */
+.editor-layout  { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.editor-content {
+  flex: 1; display: flex; gap: var(--sp-3);
+  padding: var(--sp-3);
+  overflow: hidden; min-height: 0;
+}
+
+/* Panel chat kanan di editor — lembar sendiri, sejajar dengan lembar editor */
 .chat-panel-split {
-  width: 360px; flex-shrink: 0;
-  border-left: 0.5px solid var(--border);
-  display: flex; flex-direction: column; overflow: hidden; min-height: 0;
-  animation: slideInRight 0.18s ease;
+  width: 380px; flex-shrink: 0;
+  display: flex; flex-direction: column;
+  overflow: hidden; min-height: 0;
+  background: var(--surface-canvas);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  box-shadow: var(--elev-2);
+  animation: slideInRight var(--dur-3) var(--ease-out) both;
 }
 
-@keyframes slideInRight {
-  from { opacity: 0; transform: translateX(16px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
-
-/* ── Standalone chat layout (Tanya AI view) ──────────────────────────────── */
+/* ── Layout chat penuh ───────────────────────────────────────────────────── */
 .standalone-chat-layout {
   display: flex; flex-direction: column;
-  height: 100%; overflow: hidden;
+  height: 100%; min-height: 0;
+  padding: var(--sp-3);
+  overflow: hidden;
+}
+.standalone-chat-layout > .chat-wrap {
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  box-shadow: var(--elev-2);
+  overflow: hidden;
 }
 
 /* ── Topbar ──────────────────────────────────────────────────────────────── */
 .editor-topbar {
   display: flex; align-items: center;
-  border-bottom: 0.5px solid var(--border); background: var(--bg-surface);
-  flex-shrink: 0; -webkit-app-region: no-drag;
+  flex-shrink: 0;
+  padding: 0 var(--sp-3);
+  background: transparent;
 }
 
 .topbar-tab {
-  padding: 11px 16px; font-size: 12.5px; color: var(--text-muted); background: none;
-  border-bottom: 2px solid transparent; transition: all 0.15s;
-  display: flex; align-items: center; gap: 6px;
-  -webkit-app-region: no-drag; cursor: pointer;
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-2);
+  font-size: var(--fs-sm); font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: var(--tracking-tight);
+  transition: color var(--dur-2) var(--ease-out);
+  -webkit-app-region: no-drag;
 }
-.topbar-tab .ti { font-size: 14px; }
-.topbar-tab:hover:not(.active) { color: var(--text-secondary); background: var(--bg-overlay); }
-.topbar-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.topbar-tab .ti { font-size: var(--fs-md); }
+.topbar-tab.active { color: var(--text-secondary); }
+.topbar-tab.active .ti { color: var(--accent); }
 
 .topbar-right {
-  margin-left: auto; display: flex; align-items: center; gap: 6px;
-  padding-right: 14px; -webkit-app-region: no-drag;
+  margin-left: auto;
+  display: flex; align-items: center; gap: var(--sp-2);
+  -webkit-app-region: no-drag;
 }
-.topbar-btn {
-  display: flex; align-items: center; gap: 5px;
-  padding: 5px 11px; background: var(--bg-elevated);
-  border: 0.5px solid var(--border-sub); border-radius: var(--radius-sm);
-  font-size: 11.5px; color: var(--text-secondary); cursor: pointer;
-  transition: all 0.15s; white-space: nowrap; -webkit-app-region: no-drag;
-}
-.topbar-btn:hover     { background: var(--bg-overlay); color: var(--text-primary); border-color: var(--border); }
-.topbar-btn.accent    { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent-soft); box-shadow: 0 0 8px rgba(124,106,247,0.15); }
-.topbar-btn.accent:hover { background: var(--bg-overlay); color: var(--accent); box-shadow: 0 0 12px rgba(124,106,247,0.2); }
-.topbar-btn .ti { font-size: 13px; }
 
-.spin { display: inline-block; animation: spin 1s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.topbar-btn {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: 6px var(--sp-3);
+  background: var(--surface-chrome);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-full);
+  font-size: var(--fs-xs); font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  backdrop-filter: blur(12px);
+  transition: background var(--dur-2) var(--ease-out),
+              color var(--dur-2) var(--ease-out),
+              border-color var(--dur-2) var(--ease-out),
+              box-shadow var(--dur-2) var(--ease-out);
+  -webkit-app-region: no-drag;
+}
+.topbar-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--hairline-strong);
+  color: var(--text-primary);
+}
+.topbar-btn.accent {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+  color: var(--accent-soft);
+  box-shadow: 0 0 14px var(--accent-glow);
+}
+.topbar-btn.accent:hover { color: var(--accent); box-shadow: 0 0 20px var(--accent-glow); }
+.topbar-btn .ti { font-size: var(--fs-base); }

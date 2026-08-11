@@ -1,165 +1,253 @@
+/* ── Sidebar.css ──────────────────────────────────────────────────────────
+   Chrome — sengaja tembus pandang supaya aurora terlihat menembusnya.
+   Bisa menyusut jadi rail ikon; lebarnya satu-satunya nilai yang berubah,
+   sisanya ikut lewat transisi opacity/translate.
+   ────────────────────────────────────────────────────────────────────────── */
+
 .sidebar {
-  width: 220px; flex-shrink: 0;
-  background: var(--bg-surface);
-  border-right: 0.5px solid var(--border);
+  --sidebar-w: 232px;
+
+  width: var(--sidebar-w);
+  flex-shrink: 0;
   display: flex; flex-direction: column;
-  transition: background 0.3s ease;
-}
-
-/* ── Top ─────────────────────────────────────────────────────────────── */
-.sidebar-top {
-  padding: 14px 12px 10px;
-  border-bottom: 0.5px solid var(--border);
-}
-.logo-row {
-  display: flex; align-items: center; gap: 8px;
-}
-.logo-icon {
-  width: 28px; height: 28px;
-  background: transparent;
-  border-radius: 6px; display: flex; align-items: center;
-  justify-content: center; flex-shrink: 0;
-}
-.logo-text { font-size: 15px; font-weight: 500; color: var(--text-primary); }
-.logo-ver {
-  font-size: 10px; color: var(--text-dim); margin-left: auto;
-  background: var(--bg-overlay); padding: 2px 6px; border-radius: 10px;
-}
-
-/* ── Nav ─────────────────────────────────────────────────────────────── */
-.nav-section { padding: 10px 12px 4px; }
-.nav-label {
-  font-size: 10px; color: var(--text-dim);
-  letter-spacing: 0.8px; margin-bottom: 6px; text-transform: uppercase;
-}
-.nav-item {
-  display: flex; align-items: center; gap: 8px;
-  padding: 7px 8px; border-radius: 7px; cursor: pointer;
-  font-size: 12.5px; color: var(--text-muted); margin-bottom: 2px;
-  transition: all 0.18s ease; position: relative;
-}
-.nav-item:hover { background: var(--bg-elevated); color: var(--text-secondary); }
-.nav-item.active {
-  background: var(--accent-bg); color: var(--accent-soft);
-}
-.nav-item.active::before {
-  content: ''; position: absolute; left: -12px;
-  top: 50%; transform: translateY(-50%);
-  width: 3px; height: 18px; border-radius: 0 3px 3px 0;
-  background: var(--accent);
-  animation: indicatorIn 0.2s ease;
-}
-@keyframes indicatorIn {
-  from { height: 0; opacity: 0; }
-  to   { height: 18px; opacity: 1; }
-}
-.nav-item .ti { font-size: 15px; width: 18px; text-align: center; }
-.nav-badge {
-  margin-left: auto; font-size: 10px;
-  background: var(--accent-bg); color: var(--accent);
-  padding: 1px 6px; border-radius: 10px;
-}
-
-/* ── Last Opened Preview ──────────────────────────────────────────────── */
-.last-opened-section {
-  padding: 10px 12px 8px;
-  border-top: 0.5px solid var(--border);
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
   overflow: hidden;
+  background: var(--surface-chrome);
+  border-right: 1px solid var(--hairline);
+  backdrop-filter: blur(24px) saturate(160%);
+  transition: width var(--dur-3) var(--ease-out);
+}
+.sidebar.collapsed { --sidebar-w: 64px; }
+
+/* ── Atas ────────────────────────────────────────────────────────────────── */
+.sidebar-top {
+  padding: var(--sp-3) var(--sp-3) var(--sp-2);
+  border-bottom: 1px solid var(--hairline);
+}
+.logo-row { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.logo-icon { flex-shrink: 0; border-radius: var(--r-xs); object-fit: contain; }
+.logo-text {
+  flex: 1; min-width: 0;
+  font-size: var(--fs-md); font-weight: 600;
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-primary);
+  white-space: nowrap;
 }
 
-.note-empty {
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  font-size: 12px; color: var(--text-dim); text-align: center; padding: 16px 0;
+.sidebar-toggle {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; flex-shrink: 0;
+  border-radius: var(--r-xs);
+  color: var(--text-dim);
+  transition: background var(--dur-1), color var(--dur-1);
 }
-.note-empty i { font-size: 20px; opacity: 0.4; }
+.sidebar-toggle:hover { background: var(--surface-hover); color: var(--text-primary); }
+.sidebar-toggle .ti { font-size: var(--fs-md); }
+
+/* Saat menyusut, tombol lipat menggantikan posisi teks logo */
+.sidebar.collapsed .logo-row { justify-content: center; }
+.sidebar.collapsed .logo-icon { display: none; }
+
+/* ── Navigasi ────────────────────────────────────────────────────────────── */
+.nav-section { padding: var(--sp-3) var(--sp-3) var(--sp-1); }
+
+.nav-label {
+  margin-bottom: var(--sp-2);
+  font-size: 10px; color: var(--text-dim);
+  letter-spacing: var(--tracking-wide); text-transform: uppercase;
+  white-space: nowrap;
+  transition: opacity var(--dur-2) var(--ease-out);
+}
+
+.nav-item {
+  position: relative;
+  display: flex; align-items: center; gap: var(--sp-2);
+  width: 100%;
+  margin-bottom: 2px;
+  padding: 8px var(--sp-2);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  text-align: left;
+  transition: color var(--dur-2) var(--ease-out);
+}
+.nav-item:hover  { color: var(--text-primary); }
+.nav-item:hover:not(.active) { background: var(--surface-hover); }
+.nav-item.active { color: var(--accent-soft); }
+.nav-item.active .ti { color: var(--accent); }
+
+.nav-item .ti,
+.nav-item .nav-text { position: relative; z-index: 1; }
+.nav-item .ti {
+  font-size: var(--fs-lg);
+  width: 20px; flex-shrink: 0; text-align: center;
+  transition: color var(--dur-2) var(--ease-out);
+}
+.nav-text {
+  white-space: nowrap; overflow: hidden;
+  transition: opacity var(--dur-2) var(--ease-out);
+}
+
+/* Pil aktif. view-transition-name membuatnya MELUNCUR dari item lama ke item
+   baru saat view berganti — tanpa satu baris JS animasi pun.
+   Dimatikan saat sapuan ganti tema, di sana seluruh root yang beranimasi. */
+.nav-pill {
+  position: absolute; inset: 0;
+  z-index: 0;
+  border-radius: var(--r-sm);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  box-shadow: 0 0 18px var(--accent-glow);
+}
+:root:not(.vt-theme) .nav-pill { view-transition-name: nav-pill; }
+
+/* ── Rail: sembunyikan teks, munculkan tooltip ───────────────────────────── */
+.sidebar.collapsed .nav-label,
+.sidebar.collapsed .nav-text,
+.sidebar.collapsed .logo-text,
+.sidebar.collapsed .provider-name,
+.sidebar.collapsed .provider-arrow,
+.sidebar.collapsed .sidebar-scroll { opacity: 0; pointer-events: none; }
+
+.sidebar.collapsed .nav-label { height: 0; margin: 0; overflow: hidden; }
+.sidebar.collapsed .nav-item  { justify-content: center; padding-inline: 0; }
+.sidebar.collapsed .nav-text  { position: absolute; width: 0; }
+.sidebar.collapsed .sidebar-scroll { display: none; }
+
+/* Tooltip CSS-only, hanya saat rail */
+.sidebar.collapsed [data-tip]::after {
+  content: attr(data-tip);
+  position: absolute; left: calc(100% + var(--sp-2)); top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+  z-index: var(--z-popover);
+  padding: 5px var(--sp-2);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xs);
+  box-shadow: var(--elev-3);
+  font-size: var(--fs-xs); color: var(--text-secondary);
+  white-space: nowrap;
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out);
+}
+.sidebar.collapsed [data-tip]:hover::after {
+  opacity: 1; transform: translateY(-50%) translateX(0);
+}
+
+/* ── Daftar file ─────────────────────────────────────────────────────────── */
+/* SATU region scroll. Dulu dua section sama-sama flex:1 dan saling berebut. */
+.sidebar-scroll {
+  flex: 1; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+  padding-bottom: var(--sp-2);
+  transition: opacity var(--dur-2) var(--ease-out);
+}
+
+.file-section {
+  padding: var(--sp-3) var(--sp-3) var(--sp-1);
+  border-top: 1px solid var(--hairline);
+}
 
 .note-card {
-  background: var(--bg-elevated); border: 0.5px solid var(--border);
-  border-radius: var(--radius-md); padding: 10px 11px;
-  cursor: pointer; transition: all 0.15s;
+  margin-bottom: var(--sp-2);
+  padding: var(--sp-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  animation: riseIn var(--dur-3) var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 35ms);
+  transition: background var(--dur-2) var(--ease-out),
+              border-color var(--dur-2) var(--ease-out),
+              transform var(--dur-2) var(--ease-out),
+              box-shadow var(--dur-2) var(--ease-out);
 }
-.note-card:hover { border-color: var(--border-sub); background: var(--bg-overlay); transform: translateY(-1px); }
-.note-card.active { border-color: var(--accent); background: var(--accent-bg); box-shadow: 0 0 0 1px var(--accent-border); }
+.note-card:hover {
+  background: var(--surface-hover);
+  border-color: var(--hairline-strong);
+  transform: translateY(-1px);
+  box-shadow: var(--elev-2);
+}
+.note-card.active {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+  box-shadow: 0 0 16px var(--accent-glow);
+}
 
 .note-card-title {
-  display: flex; align-items: center; gap: 5px;
-  font-size: 12px; font-weight: 500; color: var(--text-secondary);
-  margin-bottom: 4px;
+  display: flex; align-items: center; gap: var(--sp-1);
+  margin-bottom: var(--sp-1);
+  font-size: var(--fs-sm); font-weight: 500;
+  color: var(--text-secondary);
+  min-width: 0;
 }
-.note-card-title i { flex-shrink: 0; font-size: 11px; color: var(--text-dim); }
-.note-card-title-text {
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
+.note-card-title i { flex-shrink: 0; font-size: var(--fs-xs); color: var(--text-dim); }
+.note-card-title-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .note-card-meta {
-  display: flex; align-items: center; gap: 4px;
-  font-size: 10px; color: var(--text-dim); margin-bottom: 6px;
+  display: flex; align-items: center; gap: var(--sp-1);
+  font-size: 10px; color: var(--text-dim);
+  min-width: 0;
 }
-.note-card-meta i { font-size: 10px; }
-.note-cat {
-  display: inline-flex; align-items: center; gap: 3px;
-  background: var(--border); color: var(--text-muted);
-  padding: 1px 5px; border-radius: 4px; font-size: 10px;
-}
-.note-cat i { font-size: 9px; }
+.note-card-meta i { font-size: 10px; flex-shrink: 0; }
+.note-card-meta.warn { color: var(--yellow); }
+.note-card-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .7; }
 
-.note-card-preview {
-  font-size: 11px; color: var(--text-dim);
-  line-height: 1.5;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.note-card-empty { font-style: italic; opacity: 0.6; }
-
-/* ── New Note Button ─────────────────────────────────────────────────── */
-.sidebar-new-btn {
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  width: 100%; padding: 7px 10px;
-  background: var(--accent-bg); color: var(--accent-soft);
-  border: 0.5px solid var(--accent); border-radius: var(--radius-md);
-  font-size: 12px; cursor: pointer; transition: all 0.15s; margin-top: 2px;
-}
-.sidebar-new-btn:hover { background: var(--accent); color: #fff; }
-.sidebar-new-btn .ti { font-size: 13px; }
-
-/* ── Footer ──────────────────────────────────────────────────────────── */
-.sidebar-footer { padding: 10px 12px; border-top: 0.5px solid var(--border); }
-.provider-badge {
-  display: flex; align-items: center; gap: 6px;
-  padding: 7px 9px; background: var(--bg-elevated);
-  border: 0.5px solid var(--border-sub); border-radius: var(--radius-md);
-  cursor: pointer; font-size: 11.5px; color: var(--text-muted);
-  transition: all 0.18s ease;
-}
-.provider-badge:hover {
-  background: var(--bg-overlay); border-color: var(--border);
-  transform: translateY(-1px);
-}
-.provider-dot { width: 6px; height: 6px; border-radius: 50%; }
-.provider-dot.ok  { background: var(--green); }
-.provider-dot.off { background: #3a3a4a; }
-.provider-name { color: var(--text-secondary); font-weight: 500; flex: 1; font-size: 11px; }
-.provider-arrow { font-size: 12px; }
-.streak-badge { font-size: 11px; margin-left: auto; }
-
-/* dirty dot — indikator belum disimpan */
 .dirty-dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: #f59e0b; flex-shrink: 0; margin-left: auto;
+  width: 7px; height: 7px; flex-shrink: 0;
+  margin-left: auto;
+  border-radius: var(--r-full);
+  background: var(--yellow);
+  box-shadow: 0 0 6px var(--yellow);
 }
 
-/* tombol hapus recent */
 .recent-remove-btn {
-  margin-left: auto; background: none; border: none;
-  color: var(--text-dim); cursor: pointer; padding: 1px 3px;
-  font-size: 11px; border-radius: 4px; opacity: 0;
-  transition: opacity 0.15s, color 0.15s;
+  margin-left: auto;
+  padding: 1px 3px;
+  border-radius: var(--r-xs);
+  font-size: var(--fs-xs); color: var(--text-dim);
+  opacity: 0;
+  transition: opacity var(--dur-2) var(--ease-out), color var(--dur-1);
 }
 .note-card:hover .recent-remove-btn { opacity: 1; }
 .recent-remove-btn:hover { color: var(--red); }
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+.sidebar-footer { padding: var(--sp-3); border-top: 1px solid var(--hairline); }
+
+.provider-badge {
+  position: relative;
+  display: flex; align-items: center; gap: var(--sp-2);
+  width: 100%;
+  padding: 7px var(--sp-2);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-xs); color: var(--text-muted);
+  transition: background var(--dur-2) var(--ease-out),
+              border-color var(--dur-2) var(--ease-out),
+              transform var(--dur-2) var(--ease-out);
+}
+.provider-badge:hover {
+  background: var(--surface-hover);
+  border-color: var(--hairline-strong);
+  transform: translateY(-1px);
+}
+.sidebar.collapsed .provider-badge { justify-content: center; padding-inline: 0; }
+
+.provider-dot { width: 7px; height: 7px; flex-shrink: 0; border-radius: var(--r-full); }
+.provider-dot.ok  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.provider-dot.off { background: var(--dot-off); }
+
+.provider-name {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-align: left;
+  font-size: var(--fs-xs); font-weight: 500; color: var(--text-secondary);
+  transition: opacity var(--dur-2) var(--ease-out);
+}
+.provider-arrow {
+  font-size: var(--fs-sm); flex-shrink: 0;
+  transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out);
+}
+.provider-badge:hover .provider-arrow { transform: translateX(2px); }

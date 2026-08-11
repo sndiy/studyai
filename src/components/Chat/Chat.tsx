@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { useStore, type AIStatus } from '../../store/useStore'
-import type { ChatMessage } from '../../types'
+import { useStore, selectActiveModelMissing, type AIStatus } from '../../store/useStore'
+import { RETRYABLE_ERROR_KINDS, type ChatMessage } from '../../types'
 import './Chat.css'
 
 // Configure marked for synchronous use
@@ -28,11 +28,28 @@ interface ChatProps {
 }
 
 export default function Chat({ embedded = false }: ChatProps) {
-  const {
-    settings, messages, sendMessage, clearMessages,
-    streamingText, aiStatus, aiStatusDetail, cancelStream,
-    doc,
-  } = useStore()
+  // [Bug #16] Selector per-field — sebelumnya destructure dari useStore()
+  // tanpa selector membuat Chat berlangganan ke SELURUH store. Saat dipakai
+  // sebagai panel tersemat di samping Editor, itu berarti Chat ikut re-render
+  // pada SETIAP ketukan tombol di editor (doc.content berubah tiap keystroke)
+  // dan setiap perubahan state lain yang sama sekali tidak dibaca komponen ini.
+  const settings        = useStore(s => s.settings)
+  const messages        = useStore(s => s.messages)
+  const sendMessage     = useStore(s => s.sendMessage)
+  const clearMessages   = useStore(s => s.clearMessages)
+  const streamingText   = useStore(s => s.streamingText)
+  const aiStatus        = useStore(s => s.aiStatus)
+  const aiStatusDetail  = useStore(s => s.aiStatusDetail)
+  const cancelStream    = useStore(s => s.cancelStream)
+  const doc             = useStore(s => s.doc)
+  const lastErrorKind   = useStore(s => s.lastErrorKind)
+  const lastAttempt     = useStore(s => s.lastAttempt)
+  const retryLast       = useStore(s => s.retryLast)
+  const setView         = useStore(s => s.setView)
+  // [Celah 3] Sama seperti peringatan di Pengaturan, tapi ditampilkan di sini
+  // juga — supaya user yang tidak pernah membuka Pengaturan tetap tahu SEBELUM
+  // mengirim pesan, bukan setelah request gagal.
+  const activeModelMissing = useStore(selectActiveModelMissing)
 
   const [input, setInput]               = useState('')
   const [useContext, setUseContext]      = useState(embedded)  // embedded mode defaults to true
@@ -40,7 +57,6 @@ export default function Chat({ embedded = false }: ChatProps) {
   const [confirmClear, setConfirmClear] = useState(false)
   const [fileContext, setFileContext]   = useState<{ title: string; content: string } | null>(null)
 
-  const bottomRef    = useRef<HTMLDivElement>(null)
   const textareaRef  = useRef<HTMLTextAreaElement>(null)
   const messagesRef  = useRef<HTMLDivElement>(null)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
@@ -48,14 +64,37 @@ export default function Chat({ embedded = false }: ChatProps) {
 
   const isProcessing = aiStatus !== 'idle' && aiStatus !== 'error'
 
-  // Konteks aktif
+  // [L2] Sebelumnya `doc` truthy saja sudah cukup — dokumen baru yang masih
+  // kosong membuat bar "konteks aktif" tampil hijau padahal store menjaga
+  // `doc?.content` dan tidak menyuntikkan apa pun ke prompt. Sekarang harus
+  // benar-benar ada isi, sama dengan syarat yang dipakai sendMessage().
   const activeContext = useContext
-    ? (doc ? { title: doc.title, content: doc.content } : fileContext)
+    ? (doc?.content ? { title: doc.title, content: doc.content } : fileContext)
     : null
 
+  // [UI-1] `bottomRef.current.scrollIntoView()` sebelumnya dipakai di sini.
+  // Bug nyata: `scrollIntoView()` menyusuri ANCESTOR CHAIN mencari kontainer
+  // yang overflow — kalau `.chat-messages` (kontainer yang SEHARUSNYA discroll,
+  // `overflow-y:auto`) kebetulan belum overflow saat efek ini jalan (persis
+  // kondisi mount pertama / baru pindah dari view lain lewat View Transition,
+  // sebelum layout benar-benar settle), browser terus naik mencari kontainer
+  // scrollable BERIKUTNYA dan bisa salah mengunci ke `.app-shell` (yang
+  // technically scrollable karena `overflow:hidden` tetap membentuk scrollport,
+  // cuma tidak menampilkan scrollbar) kalau elemen itu KEBETULAN sedang
+  // overflow sesaat. Begitu terjadi, `.app-shell` tertinggal ter-scroll
+  // permanen — SELURUH app bergeser ke atas, dan area di bawah input jadi
+  // ruang kosong yang tidak pernah balik ke 0 lagi. Terverifikasi lewat
+  // Playwright: `.app-shell.scrollTop` macet di 200px setelah membuka view
+  // "Tanya AI"; me-reset ke 0 langsung memperbaiki layout.
+  //
+  // Fix: scroll LANGSUNG kontainer yang dimaksud (`messagesRef`, sudah ada
+  // untuk tracking tombol scroll-to-bottom) lewat scrollTop/scrollTo — tidak
+  // pernah bisa salah mengenai ancestor lain sama sekali.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length, streamingText])
+    const el = messagesRef.current
+    if (!el) return
+    el.scrollTo({ top: el.scrollHeight, behavior: aiStatus === 'streaming' ? 'auto' : 'smooth' })
+  }, [messages.length, streamingText, aiStatus])
 
   // Track scroll position for scroll-to-bottom button
   useEffect(() => {
@@ -70,7 +109,13 @@ export default function Chat({ embedded = false }: ChatProps) {
   }, [])
 
   useEffect(() => {
-    if (aiStatus === 'idle') setTimeout(() => textareaRef.current?.focus(), 50)
+    // [Bug #21] Timer sebelumnya tidak pernah di-clear saat unmount/re-run —
+    // efek yang berjalan lagi sebelum timer lama sempat fires membiarkan
+    // beberapa timer menumpuk, dan unmount di tengah 50ms itu memanggil
+    // .focus() pada textarea yang sudah lenyap dari DOM.
+    if (aiStatus !== 'idle') return
+    const tid = setTimeout(() => textareaRef.current?.focus(), 50)
+    return () => clearTimeout(tid)
   }, [aiStatus])
 
   useEffect(() => {
@@ -82,10 +127,13 @@ export default function Chat({ embedded = false }: ChatProps) {
 
   const handlePickContextFile = async () => {
     const result = await window.api.file.openAsContext()
-    if (result) {
-      setFileContext({ title: result.title, content: result.content })
-      setUseContext(true)
+    if (!result) return                      // dialog dibatalkan user
+    if (!result.ok) {
+      useStore.getState().showToast('err', `Gagal membuka file konteks: ${result.error}`)
+      return
     }
+    setFileContext({ title: result.title, content: result.content })
+    setUseContext(true)
   }
 
   const handleSend = useCallback(async () => {
@@ -94,14 +142,29 @@ export default function Chat({ embedded = false }: ChatProps) {
     setInput('')
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
     textareaRef.current?.focus()
-    await sendMessage(text, useContext, useWebSearch, useContext && !doc ? fileContext : null)
+    const accepted = await sendMessage(text, useContext, useWebSearch, useContext && !doc ? fileContext : null)
+    // [C4] Pesan ditolak SEBELUM masuk transkrip (mis. API key belum diset) —
+    // kembalikan teksnya ke textarea alih-alih membiarkannya hilang begitu saja.
+    if (!accepted) setInput(text)
   }, [input, isProcessing, useContext, useWebSearch, sendMessage, doc, fileContext])
+
+  const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleCopy = useCallback((text: string, idx: number) => {
     navigator.clipboard.writeText(text).then(() => {
       setCopiedIdx(idx)
-      setTimeout(() => setCopiedIdx(null), 2000)
+      if (copyResetTimerRef.current) clearTimeout(copyResetTimerRef.current)
+      copyResetTimerRef.current = setTimeout(() => setCopiedIdx(null), 2000)
+    }).catch(() => {
+      // [Bug #20] Penolakan izin clipboard sebelumnya jadi unhandled promise
+      // rejection — tombol diam saja tanpa umpan balik apa pun ke user.
+      useStore.getState().showToast('err', 'Gagal menyalin ke clipboard')
     })
+  }, [])
+
+  // [Bug #21] Timer reset "Tersalin!" tidak pernah di-clear saat unmount.
+  useEffect(() => () => {
+    if (copyResetTimerRef.current) clearTimeout(copyResetTimerRef.current)
   }, [])
 
   const handleSuggestion = useCallback((text: string) => {
@@ -192,14 +255,28 @@ export default function Chat({ embedded = false }: ChatProps) {
             personaName={personaName}
           />
         )}
-        <div ref={bottomRef} />
+
+        {/* [Aturan 7] Retry TIDAK pernah otomatis — kalau kuota sedang habis,
+            retry di background cuma memperparah. Kontrolnya di tangan user. */}
+        {!isProcessing && lastAttempt && lastErrorKind && RETRYABLE_ERROR_KINDS.includes(lastErrorKind) && (
+          <div className="retry-row">
+            <button className="retry-btn" onClick={retryLast}>
+              <i className="ti ti-refresh" /> Coba lagi
+            </button>
+            <span className="retry-hint">
+              {lastErrorKind === 'quota'   && 'Tunggu sebentar sebelum mencoba — kuota provider sedang habis.'}
+              {lastErrorKind === 'network' && 'Periksa koneksi internet dulu.'}
+              {lastErrorKind === 'server'  && 'Server provider sedang bermasalah.'}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Scroll to bottom */}
       {showScrollBtn && (
         <button
           className="scroll-bottom-btn"
-          onClick={() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' })}
+          onClick={() => messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: 'smooth' })}
         >
           <i className="ti ti-arrow-down" />
         </button>
@@ -233,7 +310,6 @@ export default function Chat({ embedded = false }: ChatProps) {
             className={`pill-btn ${useWebSearch ? 'on-web' : ''}`}
             onClick={() => setWebSearch(v => !v)}
             title="Web search (segera hadir)"
-            style={{ opacity: 0.5, cursor: 'not-allowed' }}
             disabled
           >
             <i className="ti ti-world" />
@@ -268,6 +344,17 @@ export default function Chat({ embedded = false }: ChatProps) {
             <span>Belum ada file dipilih</span>
             <button className="ctx-bar-btn" onClick={handlePickContextFile}>
               <i className="ti ti-folder-open" /> Pilih
+            </button>
+          </div>
+        )}
+
+        {/* [Celah 3][Aturan 4] Model aktif tidak ada di daftar terverifikasi provider ini */}
+        {activeModelMissing && (
+          <div className="ctx-bar warn">
+            <i className="ti ti-alert-circle" />
+            <span>Model aktif "{settings?.active_model}" tidak tersedia untuk key ini</span>
+            <button className="ctx-bar-btn" onClick={() => setView('settings')}>
+              <i className="ti ti-settings" /> Pengaturan
             </button>
           </div>
         )}
@@ -336,7 +423,12 @@ function WelcomeScreen({ personaName, activeContext, embedded, onPickFile, useCo
       {!embedded && (
         <div className="suggestion-chips">
           {SUGGESTIONS.map((s, i) => (
-            <button key={i} className="suggestion-chip" onClick={() => onSuggestion(s)}>
+            <button
+              key={i}
+              className="suggestion-chip"
+              style={{ '--i': i } as React.CSSProperties}
+              onClick={() => onSuggestion(s)}
+            >
               <i className="ti ti-sparkles" /> {s}
             </button>
           ))}
@@ -404,11 +496,20 @@ function StreamingBubble({ text, status, detail, personaName }: {
               {detail || getStatusLabel(status)}
             </div>
           )}
+          {/* Selagi menunggu token pertama, tampilkan rangka berkilau —
+              lebih informatif daripada bubble kosong yang diam. */}
+          {!text && status !== 'error' && (
+            <div className="stream-skeleton" aria-hidden="true">
+              <span className="skeleton-line" />
+              <span className="skeleton-line" />
+              <span className="skeleton-line" />
+            </div>
+          )}
           {text && (
             <div className="md-preview"
               dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }} />
           )}
-          {status === 'streaming' && <span className="cursor-blink">▋</span>}
+          {status === 'streaming' && <span className="stream-caret" aria-hidden="true" />}
         </div>
       </div>
     </div>
