@@ -9,7 +9,8 @@
     "preview": "electron-vite preview",
     "package": "npm run build && electron-builder",
     "package:win": "npm run build && electron-builder --win",
-    "package:linux": "npm run build && electron-builder --linux"
+    "package:linux": "npm run build && electron-builder --linux",
+    "release": "npm run package"
   },
   "dependencies": {
     "@tiptap/extension-color": "^3.23.6",
