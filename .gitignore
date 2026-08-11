@@ -10,6 +10,9 @@ out/
 release/
 build/
 
+# ── Artefak pengukuran lokal (scripts/measure-cold-start.mjs) ───────────────────
+perf-baseline.json
+
 # ── Vite ───────────────────────────────────────────────────────────────────────
 .vite/
 vite.config.*.timestamp-*

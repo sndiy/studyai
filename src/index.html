@@ -4,10 +4,47 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>StudyAI</title>
+  <style>
+    /* Skeleton statis yang tampil SEBELUM React sempat mount — geometrinya
+       harus cocok dengan chrome asli (tinggi titlebar 38px di Titlebar.css,
+       lebar rail 232px/64px di Sidebar.css) supaya serah-terima ke App
+       sungguhan tidak terlihat melompat. Nilai warna LITERAL (bukan
+       var(--token)) karena file CSS sungguhan belum tentu selesai di-parse
+       saat blok ini pertama kali dicat — kalau token warna di tokens.css
+       berubah, sesuaikan juga di sini.
+       #boot menutupi #root sepenuhnya (position:fixed + z-index tinggi)
+       sampai App.tsx menghapusnya di effect pertama — jadi urutan React
+       selesai me-render tidak perlu presisi, yang penting sebelum dihapus. */
+    #boot {
+      position: fixed; inset: 0; z-index: 999;
+      display: flex; flex-direction: column;
+      background: #08080e;
+    }
+    html[data-theme='light'] #boot { background: #eceef6; }
+    #boot-titlebar {
+      height: 38px; flex-shrink: 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+    }
+    html[data-theme='light'] #boot-titlebar { border-bottom-color: rgba(18, 20, 48, 0.10); }
+    #boot-body { flex: 1; display: flex; min-height: 0; }
+    #boot-sidebar {
+      width: 232px; flex-shrink: 0;
+      background: #191929;
+      border-right: 1px solid rgba(255, 255, 255, 0.075);
+    }
+    html[data-sidebar='collapsed'] #boot-sidebar { width: 64px; }
+    html[data-theme='light'] #boot-sidebar {
+      background: #ffffff;
+      border-right-color: rgba(18, 20, 48, 0.10);
+    }
+    #boot-main { flex: 1; }
+  </style>
   <script>
-    // Anti-kedip: tema sebenarnya tersimpan di settings.json dan baru tiba
-    // lewat IPC (async). Cache di localStorage dipakai untuk mengecat frame
-    // pertama dengan tema yang benar; App.tsx menyegarkannya setelah muat.
+    // Anti-kedip: tema & status ciut-sidebar sebenarnya tersimpan di
+    // settings.json dan baru tiba lewat IPC (async). Cache di localStorage
+    // dipakai untuk mengecat skeleton di atas dengan geometri/tema yang
+    // benar sejak frame pertama; App.tsx & useStore.ts menyegarkannya
+    // setelah settings.json selesai dibaca.
     (function () {
       try {
         var t = localStorage.getItem('studyai-theme');
@@ -15,10 +52,23 @@
       } catch (e) {
         document.documentElement.dataset.theme = 'dark';
       }
+      try {
+        if (localStorage.getItem('studyai-sidebar-collapsed') === '1') {
+          document.documentElement.dataset.sidebar = 'collapsed';
+        }
+      } catch (e) { /* mode privat */ }
+      performance.mark('boot');
     })();
   </script>
 </head>
 <body>
+  <div id="boot" aria-hidden="true">
+    <div id="boot-titlebar"></div>
+    <div id="boot-body">
+      <div id="boot-sidebar"></div>
+      <div id="boot-main"></div>
+    </div>
+  </div>
   <div id="root"></div>
   <script type="module" src="./main.tsx"></script>
 </body>

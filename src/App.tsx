@@ -1,13 +1,21 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, lazy, Suspense } from 'react'
 import { useStore } from './store/useStore'
+import { whenIdle } from './lib/idle'
 import type { PendingNav } from './types'
 import Titlebar from './components/Titlebar/Titlebar'
 import CommandPalette from './components/CommandPalette/CommandPalette'
 import Sidebar from './components/Sidebar/Sidebar'
-import Editor from './components/Editor/Editor'
-import Chat from './components/Chat/Chat'
-import Settings from './components/Settings/Settings'
 import './styles/app.css'
+
+// Editor/Chat/Settings dimuat lewat import() dinamis, bukan statis — semuanya
+// membawa dependency berat (Tiptap+ProseMirror, marked+DOMPurify) yang tidak
+// dibutuhkan untuk frame pertama. `currentView` default 'editor' dan panel
+// chat default tertutup (lihat EditorLayout), jadi bahkan Editor pun tidak
+// perlu ada di chunk awal — main.tsx melakukan prefetch idle tepat setelah
+// paint pertama supaya tetap terasa instan begitu benar-benar dibutuhkan.
+const Editor   = lazy(() => import('./components/Editor/Editor'))
+const Chat     = lazy(() => import('./components/Chat/Chat'))
+const Settings = lazy(() => import('./components/Settings/Settings'))
 
 /** Harus sama dengan kunci yang dibaca inline script di index.html. */
 const THEME_CACHE_KEY = 'studyai-theme'
@@ -37,14 +45,34 @@ export default function App() {
   const confirmLossySave     = useStore(s => s.confirmLossySave)
   const cancelLossySave      = useStore(s => s.cancelLossySave)
 
+  // Skeleton statis di index.html (#boot) menutupi #root sampai titik ini —
+  // begitu App benar-benar ter-mount & dicat, singkirkan supaya app-shell
+  // sungguhan yang sudah dirender DI BAWAHNYA langsung terlihat. Sengaja jadi
+  // effect PALING PERTAMA di komponen ini (React menjalankan useEffect sesuai
+  // urutan deklarasi), supaya tidak ada effect lain yang bisa menunda ini.
+  useEffect(() => { document.getElementById('boot')?.remove() }, [])
+
   // [B2] Main process perlu tahu status dirty untuk bisa membatalkan penutupan window
   const isDirty = useStore(s => !!s.doc?.isDirty)
   useEffect(() => { window.api.app.setDirty(isDirty) }, [isDirty])
 
   useEffect(() => {
-    Promise.all([loadSettings(), loadRecent(), useStore.getState().loadVerifiedLimits()]).catch(e =>
-      useStore.getState().showToast('err', `Gagal memuat data awal: ${String(e)}`)
-    )
+    Promise.all([loadSettings(), loadRecent()])
+      .then(() => {
+        // Daftar model AI + batas token terverifikasi tidak dibutuhkan sebelum
+        // user benar-benar membuka Pengaturan atau mengirim chat — ditunda ke
+        // saat browser idle supaya tidak ikut menyaingi IPC/main thread yang
+        // dipakai untuk frame pertama. Main process punya jaring pengaman yang
+        // sama (lihat ensureWarmed() di electron/main.ts) kalau user lebih
+        // cepat dari timer idle ini.
+        whenIdle(() => {
+          const s = useStore.getState()
+          void s.loadVerifiedLimits()
+          if (s.settings?.has_gemini_key) void s.loadProviderModels('gemini')
+          if (s.settings?.has_openai_key) void s.loadProviderModels('openai')
+        })
+      })
+      .catch(e => useStore.getState().showToast('err', `Gagal memuat data awal: ${String(e)}`))
 
     window.api.file.getPendingOpenPath().then(path => {
       if (path) openExternalFile(path)
@@ -86,7 +114,9 @@ export default function App() {
         <main className="main-area">
           {currentView === 'editor'   && <EditorLayout />}
           {currentView === 'ai'       && <StandaloneChatLayout />}
-          {currentView === 'settings' && <Settings />}
+          {currentView === 'settings' && (
+            <Suspense fallback={null}><Settings /></Suspense>
+          )}
         </main>
       </div>
       {pendingNav && (
@@ -215,10 +245,10 @@ function EditorLayout() {
         </div>
       </div>
       <div className="editor-content">
-        <Editor />
+        <Suspense fallback={null}><Editor /></Suspense>
         {showChat && (
           <div className="chat-panel-split">
-            <Chat embedded />
+            <Suspense fallback={null}><Chat embedded /></Suspense>
           </div>
         )}
       </div>
@@ -230,7 +260,7 @@ function EditorLayout() {
 function StandaloneChatLayout() {
   return (
     <div className="standalone-chat-layout">
-      <Chat />
+      <Suspense fallback={null}><Chat /></Suspense>
     </div>
   )
 }

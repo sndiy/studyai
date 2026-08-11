@@ -1,220 +1,36 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, safeStorage } from 'electron'
 import { join, basename, resolve, normalize, isAbsolute } from 'path'
 import { pathToFileURL } from 'url'
-import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync, statSync } from 'fs'
+import { existsSync } from 'fs'
+import { stat as statAsync, readFile as readFileAsync } from 'fs/promises'
 import { createHash } from 'crypto'
 import { streamAI, providerOf, listGeminiModels, listOpenAIModels, type ErrorKind } from './aiProvider'
 import { extensionOf } from '../src/lib/filePath'
 import { sortModelsForDisplay } from '../src/lib/providers'
-import { DEFAULT_PERSONA_NAME, DEFAULT_PERSONA_PROMPT, DEFAULT_PERSONA_LIMIT } from '../src/lib/personaDefaults'
+import { atomicWriteSync } from './fsAtomic'
+import { initSettings, loadSettings, saveSettings, publicSettings, type WriteResult } from './settingsStore'
+
+// ── Perf instrumentation (STUDYAI_PERF=1) ────────────────────────────────────
+// process.getCreationTime() adalah waktu spawn process OS sebenarnya (khusus
+// Electron), jadi ini mengukur dari spawn — bukan dari mulai eval JS module ini.
+const SPAWN = process.getCreationTime?.() ?? Date.now()
+const PERF  = !!process.env['STUDYAI_PERF']
+export const mark = (label: string): void => {
+  if (PERF) console.log(`[perf] ${label} ${Math.round(Date.now() - SPAWN)}`)
+}
+mark('main-eval')
 
 const USER_DATA    = app.getPath('userData')
-const SETTINGS_PATH = join(USER_DATA, 'settings.json')
-const RECENT_PATH   = join(USER_DATA, 'recent.json')
+const RECENT_PATH  = join(USER_DATA, 'recent.json')
 
-// ── Defaults ──────────────────────────────────────────────────────────────────
-const DEFAULT_SETTINGS: Record<string, string> = {
-  gemini_api_key:  '',
-  openai_api_key:  '',
-  // [M5] gemini-1.5-flash sudah dipensiunkan dari Gemini API untuk project
-  // baru — install baru dulu langsung memakai model mati sebagai default.
-  active_model:    'gemini-2.0-flash',
-  persona_name:    DEFAULT_PERSONA_NAME,
-  persona_prompt:  DEFAULT_PERSONA_PROMPT,
-  persona_limit:   DEFAULT_PERSONA_LIMIT,
-  max_tokens:      '2048',
-}
-
-// ── Rahasia: enkripsi at-rest + jangan pernah keluar ke renderer ─────────────
-// [S1] docs/ai-rules/security.md melarang API key disimpan plaintext.
-// Nilai disimpan sebagai `enc:v1:<base64>` hasil safeStorage (DPAPI di Windows,
-// Keychain di macOS, libsecret di Linux). Nilai lama yang masih plaintext tetap
-// bisa dibaca, lalu otomatis dimigrasi saat app siap.
-const SECRET_KEYS = new Set(['gemini_api_key', 'openai_api_key'])
-const ENC_PREFIX  = 'enc:v1:'
-
-function encryptSecret(value: string): string {
-  if (!value) return ''
-  if (value.startsWith(ENC_PREFIX)) return value
-  if (!safeStorage.isEncryptionAvailable()) return value
-  try {
-    return ENC_PREFIX + safeStorage.encryptString(value).toString('base64')
-  } catch (e: any) {
-    console.error('[StudyAI] safeStorage encrypt failed:', e?.message ?? e)
-    return value
-  }
-}
-
-function decryptSecret(value: string): string {
-  if (!value) return ''
-  if (!value.startsWith(ENC_PREFIX)) return value   // nilai lama (plaintext) — masih dibaca
-  try {
-    return safeStorage.decryptString(Buffer.from(value.slice(ENC_PREFIX.length), 'base64'))
-  } catch (e: any) {
-    // Jangan pernah cetak isinya; cukup laporkan bahwa dekripsi gagal
-    console.error('[StudyAI] safeStorage decrypt failed:', e?.message ?? e)
-    return ''
-  }
-}
-
-// Isi settings apa adanya (rahasia sudah didekripsi) — HANYA untuk dipakai di main
-function loadSettings(): Record<string, string> {
-  let raw: Record<string, string> = {}
-  try {
-    if (existsSync(SETTINGS_PATH)) {
-      raw = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
-    }
-  } catch (e: any) {
-    // [B19] Jangan cetak objek error mentah — pesan SyntaxError bisa memuat
-    // cuplikan isi file, dan file itu berisi API key.
-    console.error('[StudyAI] settings.json tidak bisa dibaca, memakai default sementara:', e?.name ?? 'Error')
-    settingsUnreadable = true
-    return { ...DEFAULT_SETTINGS }
-  }
-  // [Bug #6] Sebelumnya flag ini cuma pernah di-set true, tidak pernah balik ke
-  // false di jalur sukses. Satu kegagalan baca SEMENTARA (file terkunci
-  // antivirus/backup/cloud-sync saat startup) membuatnya menempel selamanya —
-  // penulisan settings berikutnya lalu mencadangkan settings.json yang
-  // sebenarnya sehat sebagai ".corrupt-*.bak" (lihat saveSettings di bawah).
-  settingsUnreadable = false
-  const merged = { ...DEFAULT_SETTINGS, ...raw }
-  for (const k of SECRET_KEYS) merged[k] = decryptSecret(merged[k] ?? '')
-  return merged
-}
-
-// [A4] Kalau settings.json gagal di-parse, JANGAN diam-diam menimpanya dengan
-// default — itu menghapus API key & persona user tanpa jejak. Tulis hanya
-// setelah user diberi tahu dan file rusaknya dicadangkan.
-let settingsUnreadable = false
-
-function atomicWriteSync(filePath: string, data: string) {
-  const tmpPath = filePath + '.tmp'
-
-  // [B2-fix] Menulis-tmp dan rename HARUS dibedakan gagalnya. Sebelumnya
-  // keduanya berbagi satu try/catch, jadi kalau tulis-tmp yang gagal (disk
-  // penuh, folder read-only, lock antivirus), fallback di bawah membuka file
-  // ASLI dengan mode 'w' dan men-truncate-nya ke 0 byte sebelum gagal lagi
-  // dengan alasan yang sama — file yang tadinya sehat berakhir kosong.
-  try {
-    writeFileSync(tmpPath, data, 'utf-8')
-    try {
-      renameSync(tmpPath, filePath)
-    } catch {
-      // Sampai titik ini file asli masih utuh — fallback tulis-langsung aman.
-      // Error dari sini sengaja TIDAK ditelan — caller yang memutuskan cara melapor.
-      writeFileSync(filePath, data, 'utf-8')
-    }
-  } finally {
-    // Jangan tinggalkan .tmp menumpuk kalau rename gagal / write parsial
-    try { if (existsSync(tmpPath)) unlinkSync(tmpPath) } catch {}
-  }
-}
-
-type WriteResult = { ok: true } | { ok: false; error: string }
-
-function saveSettings(data: Record<string, string>): WriteResult {
-  // [A4] Kalau file lama tidak terbaca, cadangkan dulu — jangan menimpa data
-  // yang mungkin masih bisa diselamatkan user secara manual.
-  if (settingsUnreadable && existsSync(SETTINGS_PATH)) {
-    try {
-      const backup = `${SETTINGS_PATH}.corrupt-${Date.now()}.bak`
-      renameSync(SETTINGS_PATH, backup)
-      console.error('[StudyAI] settings.json rusak, dicadangkan ke:', backup)
-    } catch (e: any) {
-      console.error('[StudyAI] Gagal mencadangkan settings.json rusak:', e?.message ?? e)
-    }
-    settingsUnreadable = false
-  }
-
-  const toWrite: Record<string, string> = { ...data }
-  for (const k of SECRET_KEYS) {
-    if (toWrite[k] !== undefined) toWrite[k] = encryptSecret(toWrite[k])
-  }
-
-  try {
-    atomicWriteSync(SETTINGS_PATH, JSON.stringify(toWrite, null, 2))
-    return { ok: true }
-  } catch (e: any) {
-    console.error('[StudyAI] Failed to save settings:', e?.message ?? e)
-    return { ok: false, error: e?.message ?? String(e) }
-  }
-}
-
-// [S1] Sekali jalan saat startup: key yang masih plaintext dari versi lama
-// ditulis ulang dalam bentuk terenkripsi. Harus dipanggil setelah app ready
-// karena safeStorage baru tersedia setelah itu.
-function migrateSecretsToEncrypted() {
-  if (!existsSync(SETTINGS_PATH)) return
-  if (!safeStorage.isEncryptionAvailable()) {
-    console.warn('[StudyAI] safeStorage tidak tersedia di sistem ini — API key tidak bisa dienkripsi')
-    return
-  }
-  let raw: Record<string, string>
-  try {
-    raw = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
-  } catch {
-    return   // biarkan loadSettings yang menandai file rusak
-  }
-  const needsMigration = [...SECRET_KEYS].some(k => raw[k] && !raw[k].startsWith(ENC_PREFIX))
-  if (!needsMigration) return
-
-  const migrated = { ...raw }
-  for (const k of SECRET_KEYS) {
-    if (migrated[k] && !migrated[k].startsWith(ENC_PREFIX)) migrated[k] = encryptSecret(migrated[k])
-  }
-  try {
-    atomicWriteSync(SETTINGS_PATH, JSON.stringify(migrated, null, 2))
-    console.log('[StudyAI] API key yang tersimpan berhasil dienkripsi ulang')
-  } catch (e: any) {
-    console.error('[StudyAI] Gagal migrasi enkripsi API key:', e?.message ?? e)
-  }
-}
-
-// Provider Claude dihapus (streaming tidak pernah diimplementasikan) — key yang
-// sempat tersimpan dari versi lama tidak boleh tertinggal yatim di disk.
-function removeDeadSettingsKeys() {
-  if (!existsSync(SETTINGS_PATH)) return
-  let raw: Record<string, string>
-  try {
-    raw = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
-  } catch {
-    return   // biarkan loadSettings yang menandai file rusak
-  }
-  if (!('claude_api_key' in raw)) return
-  const { claude_api_key: _drop, ...rest } = raw
-  try {
-    atomicWriteSync(SETTINGS_PATH, JSON.stringify(rest, null, 2))
-    console.log('[StudyAI] claude_api_key basi dihapus dari settings.json')
-  } catch (e: any) {
-    console.error('[StudyAI] Gagal membersihkan claude_api_key basi:', e?.message ?? e)
-  }
-}
-
-// [S2] Bentuk settings yang boleh dilihat renderer — TANPA API key.
-// security.md §"API Key" poin 4: kirim boolean keberadaan key, bukan key-nya.
-function publicSettings() {
-  const s = loadSettings()
-  return {
-    active_model:   s.active_model,
-    persona_name:   s.persona_name,
-    persona_prompt: s.persona_prompt,
-    persona_limit:  s.persona_limit,
-    max_tokens:     s.max_tokens,
-    theme:          s.theme as 'light' | 'dark' | undefined,
-    // Allowlist ini yang menentukan apa yang sampai ke renderer: setting yang
-    // tidak terdaftar di sini akan tersimpan ke disk tapi tidak pernah kembali.
-    sidebar_collapsed: s.sidebar_collapsed as string | undefined,
-    has_gemini_key: !!s.gemini_api_key,
-    has_openai_key: !!s.openai_api_key,
-    settings_unreadable:  settingsUnreadable,
-    encryption_available: safeStorage.isEncryptionAvailable(),
-  }
-}
+// Settings (baca/tulis/enkripsi/migrasi) dipindah ke ./settingsStore — satu
+// pembacaan+dekripsi di-cache di memori alih-alih dibaca ulang dari disk di
+// setiap pemanggilan (dulu 4x sebelum window pernah tampil).
 
 // Recent files: [{ path, title, updatedAt }]
-function loadRecent(): { path: string; title: string; updatedAt: string }[] {
+async function loadRecent(): Promise<{ path: string; title: string; updatedAt: string }[]> {
   try {
-    if (existsSync(RECENT_PATH)) return JSON.parse(readFileSync(RECENT_PATH, 'utf-8'))
+    if (existsSync(RECENT_PATH)) return JSON.parse(await readFileAsync(RECENT_PATH, 'utf-8'))
   } catch (e) {
     console.error('[StudyAI] Failed to load recent files:', e)
   }
@@ -234,8 +50,8 @@ function saveRecent(list: { path: string; title: string; updatedAt: string }[]):
 // [B17-fix] Sebelumnya hasil saveRecent() dibuang begitu saja di sini — kalau
 // recent.json gagal ditulis, kegagalannya lenyap tanpa log maupun pesan,
 // berbeda dari kebijakan [B8] yang dipegang konsisten di jalur tulis lain.
-function addToRecent(filePath: string, title: string): WriteResult {
-  let list = loadRecent().filter(r => r.path !== filePath)
+async function addToRecent(filePath: string, title: string): Promise<WriteResult> {
+  let list = (await loadRecent()).filter(r => r.path !== filePath)
   list.unshift({ path: filePath, title, updatedAt: new Date().toISOString() })
   if (list.length > 20) list = list.slice(0, 20)
   return saveRecent(list)
@@ -358,7 +174,8 @@ let forceClose  = false
 const WINDOW_BG = { dark: '#08080e', light: '#eceef6' } as const
 
 function createWindow() {
-  const iconPath = join(__dirname, '../../resources/icon.png')
+  // icon_256.png (58 KB) cukup untuk taskbar/window — icon.png lama 454 KB @1024².
+  const iconPath = join(__dirname, '../../resources/icon_256.png')
 
   // Dulu di-hardcode ke warna gelap, sehingga user light theme selalu kena
   // kedipan gelap saat app dibuka.
@@ -381,6 +198,20 @@ function createWindow() {
       webviewTag: false,
     },
   })
+  mark('window-created')
+
+  if (PERF) {
+    win.webContents.on('did-finish-load', () => mark('did-finish-load'))
+    // Menumpang console pipe yang sudah ada — renderer nge-log lewat console.log
+    // biasa, main cuma meneruskan baris yang berawalan tag [perf] ke stdout-nya
+    // sendiri supaya semua timestamp ada di satu aliran output yang sama.
+    win.webContents.on('console-message', (_e, level, msg) => {
+      // level: 0 verbose, 1 info, 2 warning, 3 error (dok Electron). Warning/
+      // error ikut diteruskan supaya mode diagnostik ini juga menangkap
+      // pelanggaran CSP atau error modul dinamis (import() gagal dsb).
+      if (msg.startsWith('[perf]') || level >= 2) console.log(`[renderer:${level}]`, msg)
+    })
+  }
 
   // [B3][S3] Tanpa guard ini, satu klik pada link di jawaban AI atau di file .md
   // yang dibuka akan menavigasi renderer ke situs remote — dan preload ikut jalan
@@ -417,7 +248,15 @@ function createWindow() {
     win?.webContents.send('app:requestClose')
   })
 
-  win.once('ready-to-show', () => win?.show())
+  win.once('ready-to-show', () => {
+    win?.show()
+    mark('ready-to-show')
+    // Jaringan (ListModels Gemini/OpenAI) ditunda sampai window benar-benar
+    // tampil, supaya tidak berebut main thread/socket dengan pembuatan window.
+    // Kalau user langsung memakai AI sebelum timer ini sempat jalan,
+    // ensureWarmed() juga dipanggil dari ai:getModels/ai:stream — lihat di sana.
+    setTimeout(() => { void ensureWarmed() }, 1500)
+  })
 
   // Titlebar custom harus ikut berubah ikonnya saat window di-maximize lewat
   // jalur lain (snap Windows, double-click tepi, shortcut OS).
@@ -451,9 +290,14 @@ if (!gotLock) {
   })
 
   app.whenReady().then(() => {
-    migrateSecretsToEncrypted()
-    removeDeadSettingsKeys()
-    void warmVerifiedLimits()
+    mark('app-ready')
+    // Satu baca+migrasi+dekripsi settings.json, di-cache di memori — dulu ini
+    // 4 pembacaan terpisah (migrateSecretsToEncrypted, removeDeadSettingsKeys,
+    // warmVerifiedLimits, createWindow masing-masing baca sendiri) sebelum
+    // window pernah tampil. warmVerifiedLimits (2 panggilan HTTPS keluar) juga
+    // TIDAK lagi dipanggil di sini — lihat win.once('ready-to-show') di bawah.
+    initSettings()
+    mark('settings-loaded')
     createWindow()
     app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
   })
@@ -506,8 +350,8 @@ ipcMain.handle('settings:set', (_e, key: string, value: string) => {
 // ── Recent files ──────────────────────────────────────────────────────────────
 ipcMain.handle('recent:getAll', () => loadRecent())
 
-ipcMain.handle('recent:remove', (_e, filePath: string) => {
-  const list = loadRecent().filter(r => r.path !== filePath)
+ipcMain.handle('recent:remove', async (_e, filePath: string) => {
+  const list = (await loadRecent()).filter(r => r.path !== filePath)
   return saveRecent(list)
 })
 
@@ -545,17 +389,17 @@ type ReadResult =
   | { ok: true; title: string; content: string; filePath: string }
   | { ok: false; error: string }
 
-function readFileContent(rawPath: string): ReadResult {
+async function readFileContent(rawPath: string): Promise<ReadResult> {
   // [S4] Validasi path sebelum menyentuh filesystem
   const check = checkFilePath(rawPath)
   if (!check.ok) return check
   const filePath = check.path
 
   try {
-    // [B13] Batasi ukuran — readFileSync di main process membekukan seluruh app
+    // [B13] Batasi ukuran — baca file besar membekukan seluruh app kalau sinkron
     let stat
     try {
-      stat = statSync(filePath)
+      stat = await statAsync(filePath)
     } catch {
       return { ok: false, error: 'File tidak ditemukan atau tidak bisa diakses' }
     }
@@ -569,7 +413,7 @@ function readFileContent(rawPath: string): ReadResult {
     const name = basename(filePath).replace(/\.[^.]+$/, '') || 'Tanpa Judul'
     let text: string
     try {
-      text = readFileSync(filePath, 'utf-8').trim()
+      text = (await readFileAsync(filePath, 'utf-8')).trim()
     } catch (readErr: any) {
       console.error('[StudyAI] Failed to read file:', filePath, readErr?.code ?? readErr?.message)
       return {
@@ -666,7 +510,7 @@ ipcMain.handle('file:save', async (_e, note: {
       // [B9] Judul ikut tersimpan sebagai front-matter kalau beda dari nama file
       atomicWriteSync(targetPath, withFrontmatter(note.title, note.content, targetPath))
     }
-    const recentResult = addToRecent(targetPath, note.title)
+    const recentResult = await addToRecent(targetPath, note.title)
     return {
       ok: true,
       filePath: targetPath,
@@ -763,6 +607,7 @@ ipcMain.handle('ai:validateKey', async (_e, provider: string, key?: string) => {
 // provider kalau cache masih cocok dengan key yang sekarang tersimpan, kecuali
 // `force: true`. Ini yang membuat pindah tab Pengaturan tidak memicu fetch baru.
 ipcMain.handle('ai:getModels', async (_e, provider: string, opts?: { force?: boolean }) => {
+  void ensureWarmed()   // jaga-jaga kalau idle timer startup belum sempat jalan
   if (!isModelProvider(provider)) {
     return { valid: false, error: `Provider "${provider}" belum didukung`, errorKind: 'other' }
   }
@@ -831,6 +676,23 @@ async function warmVerifiedLimits() {
   await Promise.allSettled(jobs)
 }
 
+// warmVerifiedLimits() dulu dipanggil langsung dari app.whenReady(), berarti 2
+// panggilan HTTPS keluar (Gemini + OpenAI ListModels) berlomba dengan pembuatan
+// window setiap kali app dibuka — walau di-`void`, keduanya tetap berebut event
+// loop & socket dengan langkah-langkah lain saat startup.
+//
+// Sekarang dipanggil belakangan (idle timer setelah ready-to-show), TAPI kalau
+// user langsung memakai AI sebelum timer itu sempat jalan, ai:getModels/ai:stream
+// di bawah juga memanggil ensureWarmed() — jadi pemakaian AI pertama tidak
+// pernah lebih lambat dari sebelumnya, sekaligus startup tidak pernah menunggu
+// jaringan. Promise di-memo supaya dipanggil dari manapun & berkali-kali tetap
+// cuma menjalankan satu round-trip jaringan.
+let warmedPromise: Promise<void> | null = null
+function ensureWarmed(): Promise<void> {
+  if (!warmedPromise) warmedPromise = warmVerifiedLimits()
+  return warmedPromise
+}
+
 // [Aturan 8] Saran pindah provider — hanya kalau provider satunya benar-benar
 // punya key tersimpan, supaya sarannya bisa langsung dieksekusi user.
 function alternativeProviderHint(model: string): string | null {
@@ -866,6 +728,7 @@ ipcMain.handle('ai:stream', async (e, req: {
   systemPrompt:     string
   maxOutputTokens:  number
 }) => {
+  void ensureWarmed()   // jaga-jaga kalau idle timer startup belum sempat jalan
   const { requestId, model, messages, systemPrompt, maxOutputTokens } = req
 
   const emit = (chunk: { text: string; done: boolean; error?: string; errorKind?: string }) => {

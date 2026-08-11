@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { useEditor, EditorContent } from '@tiptap/react'
+import { useEditor, useEditorState, EditorContent, type Editor as TiptapEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import TextAlign from '@tiptap/extension-text-align'
 import { Color } from '@tiptap/extension-color'
@@ -10,77 +10,13 @@ import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table
 import Image from '@tiptap/extension-image'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
-import TurndownService from 'turndown'
-import { tables as turndownTables, taskListItems as turndownTaskListItems } from 'turndown-plugin-gfm'
-import { marked } from 'marked'
 import { useStore } from '../../store/useStore'
+import { registerEditorFlush, scheduleIdleFlush } from '../../store/liveDoc'
 import { markWriting, clearWriting } from '../../lib/writingMode'
 import { compareFidelity } from '../../lib/mdFidelity'
 import { extensionOf } from '../../lib/filePath'
+import { getTurndown, parseMarkdown } from '../../lib/mdSerialize'
 import './Editor.css'
-
-const turndown = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced' })
-// Tabel GFM (```| a | b |```) dan `- [ ] task` — dua dari tiga konstruksi yang
-// hilang di Bug #1. Hanya dua rule ini yang diambil dari plugin, BUKAN bundel
-// `gfm` penuhnya: bundel itu juga menimpa strikethrough dengan sintaks tilde
-// tunggal non-standar (`~teks~`), berbeda dari `~~teks~~` yang dipetakan balik
-// oleh Strike node TipTap (lihat keepStrikethrough di bawah).
-turndown.use([turndownTables, turndownTaskListItems])
-
-// [A1] Markdown murni tidak punya sintaks untuk underline, warna teks, highlight,
-// maupun perataan teks. Turndown default membuang keempatnya TANPA peringatan,
-// jadi format yang dipakai user hilang permanen begitu file disimpan — sementara
-// di layar masih terlihat utuh selama sesi berjalan.
-//
-// HTML inline di dalam Markdown itu legal, marked meneruskannya apa adanya, dan
-// TipTap bisa mem-parsing-nya kembali menjadi mark yang sama. Jadi keempat node
-// ini dipertahankan sebagai HTML alih-alih dibuang.
-const attr = (node: Node, name: string) => (node as HTMLElement).getAttribute?.(name) ?? ''
-const esc  = (v: string) => v.replace(/"/g, '&quot;')
-
-turndown.addRule('keepUnderline', {
-  filter: ['u'],
-  replacement: (content) => `<u>${content}</u>`,
-})
-
-turndown.addRule('keepHighlight', {
-  filter: ['mark'],
-  replacement: (content, node) => {
-    const color = attr(node, 'data-color')
-    const style = attr(node, 'style')
-    const attrs = [
-      color ? ` data-color="${esc(color)}"` : '',
-      style ? ` style="${esc(style)}"`      : '',
-    ].join('')
-    return `<mark${attrs}>${content}</mark>`
-  },
-})
-
-// Warna teks dari extension Color dirender sebagai <span style="color: …">
-turndown.addRule('keepTextStyle', {
-  filter: (node) => node.nodeName === 'SPAN' && !!attr(node, 'style'),
-  replacement: (content, node) => `<span style="${esc(attr(node, 'style'))}">${content}</span>`,
-})
-
-// Perataan teks ada sebagai style di blok, bukan sebagai mark. Isinya dipertahankan
-// sebagai HTML utuh supaya format di dalamnya (bold, warna, dst.) ikut selamat.
-turndown.addRule('keepAlignedBlock', {
-  filter: (node) =>
-    /^(P|H1|H2|H3)$/.test(node.nodeName) && /text-align/i.test(attr(node, 'style')),
-  replacement: (_content, node) => `\n\n${(node as HTMLElement).outerHTML}\n\n`,
-})
-
-// [Ditemukan saat mengerjakan Bug #1] Strike (tombol Strikethrough di toolbar)
-// merender <s>, tapi turndown TIDAK punya rule bawaan untuk <s>/<del>/<strike> —
-// isinya lolos tanpa tanda formatnya hilang, sama persis seperti empat kasus
-// di atas. `~~teks~~` dipilih (bukan `~teks~`) karena itu yang dipetakan balik
-// ke <del> oleh marked (gfm:true) dan diterima parseHTML Strike node TipTap.
-turndown.addRule('keepStrikethrough', {
-  // Filter fungsi, bukan array tag — 'strike' bukan key valid di
-  // HTMLElementTagNameMap (tag lawas, tidak ada di lib.dom.d.ts).
-  filter: (node) => /^(S|DEL|STRIKE)$/.test(node.nodeName),
-  replacement: (content) => `~~${content}~~`,
-})
 
 const TEXT_COLORS      = ['#ffffff','#e2e8f0','#94a3b8','#475569','#f87171','#fb923c','#fbbf24','#34d399','#60a5fa','#a78bfa','#f472b6','#000000']
 const HIGHLIGHT_COLORS = ['#fef08a','#bbf7d0','#bfdbfe','#fecaca','#e9d5ff','#fed7aa']
@@ -189,25 +125,228 @@ function FloatingMenu({ editor }: { editor: any }) {
   )
 }
 
-export default function Editor() {
-  const doc = useStore(s => s.doc)
-  const newDoc = useStore(s => s.newDoc)
-  const openFile = useStore(s => s.openFile)
-  const saveDoc = useStore(s => s.saveDoc)
-  const updateContent = useStore(s => s.updateContent)
-  const updateTitle = useStore(s => s.updateTitle)
-  const setContentWarning = useStore(s => s.setContentWarning)
+/**
+ * Toolbar dipisah dari Editor supaya statusnya (bold aktif? ada di tabel?
+ * dst.) dibaca lewat useEditorState, bukan lewat re-render Editor.
+ *
+ * [Jebakan] @tiptap/react default `shouldRerenderOnTransaction: false` —
+ * useEditor() TIDAK re-render saat transaksi ProseMirror. Toolbar dulu tetap
+ * ikut segar sebagai EFEK SAMPING dari onUpdate menulis ke store tiap
+ * ketukan (yang sekarang sudah dihapus, lihat komentar onUpdate di atas).
+ * Tanpa useEditorState di sini, toolbar akan membeku begitu bug performanya
+ * diperbaiki. Selector dievaluasi tiap transaksi (semua isActive()/can() di
+ * bawah O(1)/O(depth)) dan equalityFn default (deep-equal) memotong render
+ * kalau tidak ada flag yang berubah — jadi mengetik prosa TIDAK me-render
+ * Toolbar sama sekali, cuma transisi format yang memicu render.
+ */
+function Toolbar({ editor }: { editor: TiptapEditor }) {
+  const s = useEditorState({
+    editor,
+    selector: ({ editor: e }) => ({
+      canUndo: e.can().undo(), canRedo: e.can().redo(),
+      heading: e.isActive('heading', { level: 1 }) ? '1'
+             : e.isActive('heading', { level: 2 }) ? '2'
+             : e.isActive('heading', { level: 3 }) ? '3' : '0',
+      bold: e.isActive('bold'), italic: e.isActive('italic'),
+      underline: e.isActive('underline'), strike: e.isActive('strike'),
+      code: e.isActive('code'), codeBlock: e.isActive('codeBlock'),
+      blockquote: e.isActive('blockquote'), inTable: e.isActive('table'),
+      bullet: e.isActive('bulletList'), ordered: e.isActive('orderedList'), task: e.isActive('taskList'),
+      alignL: e.isActive({ textAlign: 'left' }), alignC: e.isActive({ textAlign: 'center' }),
+      alignR: e.isActive({ textAlign: 'right' }), alignJ: e.isActive({ textAlign: 'justify' }),
+    }),
+  })
 
   const [showColorPicker, setShowColorPicker] = useState(false)
   const [showHlPicker, setShowHlPicker]       = useState(false)
   const [showImagePicker, setShowImagePicker] = useState(false)
   const [imageUrl, setImageUrl]               = useState('')
+
+  const colorRef = useRef<HTMLDivElement>(null)
+  const hlRef     = useRef<HTMLDivElement>(null)
+  const imgRef    = useRef<HTMLDivElement>(null)
+
+  const insertImage = useCallback(() => {
+    const url = imageUrl.trim()
+    if (!url) return
+    editor.chain().focus().setImage({ src: url }).run()
+    setImageUrl('')
+    setShowImagePicker(false)
+  }, [imageUrl, editor])
+
+  // Tutup picker saat klik luar
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (colorRef.current && !colorRef.current.contains(e.target as Node)) setShowColorPicker(false)
+      if (hlRef.current    && !hlRef.current.contains(e.target as Node))    setShowHlPicker(false)
+      if (imgRef.current   && !imgRef.current.contains(e.target as Node))   setShowImagePicker(false)
+    }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+
+  return (
+    <div className="toolbar toolbar-wysiwyg">
+      <TBtn icon="ti-arrow-back-up"    tip="Undo" disabled={!s.canUndo} onClick={() => editor.chain().focus().undo().run()} />
+      <TBtn icon="ti-arrow-forward-up" tip="Redo" disabled={!s.canRedo} onClick={() => editor.chain().focus().redo().run()} />
+      <div className="tb-sep" />
+
+      <select className="tb-select"
+        value={s.heading}
+        onChange={e => {
+          const v = Number(e.target.value)
+          if (v===0) editor.chain().focus().setParagraph().run()
+          else editor.chain().focus().toggleHeading({ level: v as 1|2|3 }).run()
+        }}>
+        <option value="0">Paragraf</option>
+        <option value="1">Heading 1</option>
+        <option value="2">Heading 2</option>
+        <option value="3">Heading 3</option>
+      </select>
+      <div className="tb-sep" />
+
+      <TBtn icon="ti-bold"          tip="Bold"          active={s.bold}      onClick={() => editor.chain().focus().toggleBold().run()} />
+      <TBtn icon="ti-italic"        tip="Italic"        active={s.italic}    onClick={() => editor.chain().focus().toggleItalic().run()} />
+      <TBtn icon="ti-underline"     tip="Underline"     active={s.underline} onClick={() => editor.chain().focus().toggleUnderline().run()} />
+      <TBtn icon="ti-strikethrough" tip="Strikethrough" active={s.strike}    onClick={() => editor.chain().focus().toggleStrike().run()} />
+      <div className="tb-sep" />
+
+      <TBtn icon="ti-align-left"      tip="Rata Kiri"  active={s.alignL} onClick={() => editor.chain().focus().setTextAlign('left').run()} />
+      <TBtn icon="ti-align-center"    tip="Tengah"     active={s.alignC} onClick={() => editor.chain().focus().setTextAlign('center').run()} />
+      <TBtn icon="ti-align-right"     tip="Rata Kanan" active={s.alignR} onClick={() => editor.chain().focus().setTextAlign('right').run()} />
+      <TBtn icon="ti-align-justified" tip="Justify"    active={s.alignJ} onClick={() => editor.chain().focus().setTextAlign('justify').run()} />
+      <div className="tb-sep" />
+
+      <TBtn icon="ti-list"         tip="Bullet List"  active={s.bullet}  onClick={() => editor.chain().focus().toggleBulletList().run()} />
+      <TBtn icon="ti-list-numbers" tip="Ordered List" active={s.ordered} onClick={() => editor.chain().focus().toggleOrderedList().run()} />
+      <TBtn icon="ti-list-check"   tip="Task List"    active={s.task}    onClick={() => editor.chain().focus().toggleTaskList().run()} />
+      <div className="tb-sep" />
+
+      <TBtn icon="ti-quote"     tip="Blockquote" active={s.blockquote} onClick={() => editor.chain().focus().toggleBlockquote().run()} />
+      <TBtn icon="ti-code"      tip="Inline Code" active={s.code}      onClick={() => editor.chain().focus().toggleCode().run()} />
+      <TBtn icon="ti-code-dots" tip="Code Block"  active={s.codeBlock} onClick={() => editor.chain().focus().toggleCodeBlock().run()} />
+      <div className="tb-sep" />
+
+      <TBtn icon="ti-table-plus" tip="Sisipkan Tabel"
+        onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} />
+      {s.inTable && (
+        <>
+          <TBtn icon="ti-row-insert-bottom"   tip="Tambah Baris" onClick={() => editor.chain().focus().addRowAfter().run()} />
+          <TBtn icon="ti-column-insert-right" tip="Tambah Kolom" onClick={() => editor.chain().focus().addColumnAfter().run()} />
+          <TBtn icon="ti-row-remove"          tip="Hapus Baris"  onClick={() => editor.chain().focus().deleteRow().run()} />
+          <TBtn icon="ti-column-remove"       tip="Hapus Kolom"  onClick={() => editor.chain().focus().deleteColumn().run()} />
+          <TBtn icon="ti-table-off"           tip="Hapus Tabel"  onClick={() => editor.chain().focus().deleteTable().run()} />
+        </>
+      )}
+
+      <div className="tb-color-wrap" ref={imgRef}>
+        <button className="tb-btn" title="Sisipkan Gambar" onMouseDown={e => {
+          e.preventDefault(); setShowImagePicker(v => !v); setShowColorPicker(false); setShowHlPicker(false)
+        }}>
+          <i className="ti ti-photo" /><span className="tb-btn-label">Gambar</span>
+        </button>
+        {showImagePicker && (
+          <div className="image-url-popover">
+            <input
+              className="image-url-input"
+              type="text"
+              placeholder="URL gambar…"
+              value={imageUrl}
+              onChange={e => setImageUrl(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); insertImage() } }}
+              autoFocus
+            />
+            <button className="image-url-btn" onMouseDown={e => { e.preventDefault(); insertImage() }} title="Sisipkan">
+              <i className="ti ti-check" />
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="tb-sep" />
+
+      <div className="tb-color-wrap" ref={colorRef}>
+        <button className="tb-btn" title="Warna Teks" onMouseDown={e => { e.preventDefault(); setShowColorPicker(v=>!v); setShowHlPicker(false); setShowImagePicker(false) }}>
+          <i className="ti ti-letter-a"/><span className="tb-btn-label">Warna</span>
+        </button>
+        {showColorPicker && (
+          <div className="color-palette">
+            {TEXT_COLORS.map(c => (
+              <button key={c} className="color-swatch" style={{ background:c, border:c==='#ffffff'?'1px solid #444':'none' }}
+                onMouseDown={e => { e.preventDefault(); editor.chain().focus().setColor(c).run(); setShowColorPicker(false) }} />
+            ))}
+            <button className="color-swatch color-clear" onMouseDown={e => { e.preventDefault(); editor.chain().focus().unsetColor().run(); setShowColorPicker(false) }}>✕</button>
+          </div>
+        )}
+      </div>
+
+      <div className="tb-color-wrap" ref={hlRef}>
+        <button className="tb-btn" title="Highlight" onMouseDown={e => { e.preventDefault(); setShowHlPicker(v=>!v); setShowColorPicker(false); setShowImagePicker(false) }}>
+          <i className="ti ti-highlight"/><span className="tb-btn-label">Sorot</span>
+        </button>
+        {showHlPicker && (
+          <div className="color-palette">
+            {HIGHLIGHT_COLORS.map(c => (
+              <button key={c} className="color-swatch" style={{ background:c }}
+                onMouseDown={e => { e.preventDefault(); editor.chain().focus().setHighlight({ color:c }).run(); setShowHlPicker(false) }} />
+            ))}
+            <button className="color-swatch color-clear" onMouseDown={e => { e.preventDefault(); editor.chain().focus().unsetHighlight().run(); setShowHlPicker(false) }}>✕</button>
+          </div>
+        )}
+      </div>
+      <div className="tb-sep" />
+      <TBtn icon="ti-clear-formatting" tip="Hapus Format" onClick={() => editor.chain().focus().clearNodes().unsetAllMarks().run()} />
+    </div>
+  )
+}
+
+/**
+ * [Perf sesi panjang] getText() adalah walk O(n) atas seluruh dokumen —
+ * dihitung ulang lewat idle timer yang bereaksi ke event 'update' editor,
+ * bukan setiap kali Editor re-render. Dipakai sebagai hook (bukan komponen
+ * leaf) supaya SATU listener melayani dua titik tampil (header + footer)
+ * sekaligus, tanpa duplikasi kerja.
+ */
+function useWordCount(editor: TiptapEditor | null): number {
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    if (!editor) { setCount(0); return }
+
+    let idleHandle: number | null = null
+    const recompute = () => setCount(editor.getText().trim().split(/\s+/).filter(Boolean).length)
+    const schedule = () => {
+      if (idleHandle != null) return
+      const run = () => { idleHandle = null; recompute() }
+      idleHandle = typeof requestIdleCallback === 'function'
+        ? requestIdleCallback(run, { timeout: 1500 }) as unknown as number
+        : setTimeout(run, 1500) as unknown as number
+    }
+
+    recompute()   // hitungan awal saat mount / berganti dokumen
+    editor.on('update', schedule)
+    return () => {
+      editor.off('update', schedule)
+      if (idleHandle != null) {
+        if (typeof cancelIdleCallback === 'function') cancelIdleCallback(idleHandle)
+        else clearTimeout(idleHandle)
+      }
+    }
+  }, [editor])
+
+  return count
+}
+
+export default function Editor() {
+  const doc = useStore(s => s.doc)
+  const newDoc = useStore(s => s.newDoc)
+  const openFile = useStore(s => s.openFile)
+  const saveDoc = useStore(s => s.saveDoc)
+  const updateTitle = useStore(s => s.updateTitle)
+  const setContentWarning = useStore(s => s.setContentWarning)
+
   const [justSaved, setJustSaved]             = useState(false)
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const colorRef  = useRef<HTMLDivElement>(null)
-  const hlRef     = useRef<HTMLDivElement>(null)
-  const imgRef    = useRef<HTMLDivElement>(null)
   const isBinding = useRef(false)
   const lastContentRef = useRef<string | null>(null)
 
@@ -233,12 +372,19 @@ export default function Editor() {
       TaskItem.configure({ nested: true }),
     ],
     content: '',
-    onUpdate: ({ editor }) => {
+    // [Perf sesi panjang] TIDAK LAGI menyerialisasi seluruh dokumen (getHTML +
+    // turndown, keduanya O(n)) di sini — itu dulu jalan pada SETIAP ketukan,
+    // dan tumbuh makin berat seiring dokumen makin panjang (lihat liveDoc.ts).
+    // markDirty() cuma sekali per sesi edit (dijaga guard di bawah, bukan
+    // ditulis ulang tiap keystroke), dan konten sungguhan baru ditarik lewat
+    // scheduleIdleFlush() — background, atau dipaksa oleh saveDoc/sendMessage
+    // tepat sebelum benar-benar dibutuhkan.
+    onUpdate: () => {
       if (isBinding.current) return
       markWriting()
-      const md = turndown.turndown(editor.getHTML())
-      lastContentRef.current = md
-      updateContent(md)
+      const st = useStore.getState()
+      if (!st.doc?.isDirty) st.markDirty()
+      scheduleIdleFlush()
     },
     onFocus: () => markWriting(),
     onBlur:  () => clearWriting(),
@@ -248,6 +394,20 @@ export default function Editor() {
   // Jangan tinggalkan aurora dalam keadaan redup kalau editor dilepas saat fokus
   useEffect(() => clearWriting, [])
 
+  // Daftarkan cara menarik markdown terkini dari editor ini — dipanggil dari
+  // liveDoc.ts (idle timer, atau tepat sebelum saveDoc/sendMessage). Menjaga
+  // lastContentRef tetap sinkron di sini juga supaya guard di effect "load
+  // konten" di bawah (`doc.content === lastContentRef.current`) tetap benar.
+  useEffect(() => {
+    registerEditorFlush(() => {
+      if (!editor) return null
+      const md = getTurndown().turndown(editor.getHTML())
+      lastContentRef.current = md
+      return md
+    })
+    return () => registerEditorFlush(null)
+  }, [editor])
+
   // Load konten saat doc berubah secara eksternal
   useEffect(() => {
     if (!editor || !doc) return
@@ -256,7 +416,7 @@ export default function Editor() {
     isBinding.current = true
     lastContentRef.current = doc.content
     const raw    = doc.content || ''
-    editor.chain().setContent(marked.parse(raw, { breaks: true }) as string, { emitUpdate: false }).run()
+    editor.chain().setContent(parseMarkdown(raw), { emitUpdate: false }).run()
 
     // Unlock after TipTap finishes its update cycle (not a fragile fixed timeout)
     let raf1: number
@@ -269,7 +429,7 @@ export default function Editor() {
         // konstruksi APA PUN yang schema tidak kenal — bukan cuma tabel/
         // gambar/task-list yang sudah ditambal lewat extension di atas —
         // supaya celah berikutnya yang belum diketahui tidak lolos senyap.
-        const roundTripped = turndown.turndown(editor.getHTML())
+        const roundTripped = getTurndown().turndown(editor.getHTML())
         const { lossy, lost } = compareFidelity(raw, roundTripped)
         setContentWarning(lossy ? lost : null)
       })
@@ -304,26 +464,11 @@ export default function Editor() {
     return () => window.removeEventListener('keydown', handler)
   }, [handleSave])
 
-  const insertImage = useCallback(() => {
-    const url = imageUrl.trim()
-    if (!url || !editor) return
-    editor.chain().focus().setImage({ src: url }).run()
-    setImageUrl('')
-    setShowImagePicker(false)
-  }, [imageUrl, editor])
-
-  // Tutup picker saat klik luar
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (colorRef.current && !colorRef.current.contains(e.target as Node)) setShowColorPicker(false)
-      if (hlRef.current    && !hlRef.current.contains(e.target as Node))    setShowHlPicker(false)
-      if (imgRef.current   && !imgRef.current.contains(e.target as Node))   setShowImagePicker(false)
-    }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [])
-
-  const wordCount = editor ? editor.getText().trim().split(/\s+/).filter(Boolean).length : 0
+  // [Perf sesi panjang] getText() adalah walk O(n) atas seluruh dokumen —
+  // dihitung ulang lewat idle timer di dalam hook ini (bereaksi ke event
+  // 'update' editor secara langsung), BUKAN dieksekusi ulang tiap render
+  // Editor seperti sebelumnya.
+  const wordCount = useWordCount(editor)
 
   // Empty state
   if (!doc) return (
@@ -394,118 +539,7 @@ export default function Editor() {
       <div className="divider" />
 
       {/* Toolbar */}
-      {editor && (
-        <div className="toolbar toolbar-wysiwyg">
-          <TBtn icon="ti-arrow-back-up"    tip="Undo" disabled={!editor.can().undo()} onClick={() => editor.chain().focus().undo().run()} />
-          <TBtn icon="ti-arrow-forward-up" tip="Redo" disabled={!editor.can().redo()} onClick={() => editor.chain().focus().redo().run()} />
-          <div className="tb-sep" />
-
-          <select className="tb-select"
-            value={editor.isActive('heading',{level:1})?'1':editor.isActive('heading',{level:2})?'2':editor.isActive('heading',{level:3})?'3':'0'}
-            onChange={e => {
-              const v = Number(e.target.value)
-              if (v===0) editor.chain().focus().setParagraph().run()
-              else editor.chain().focus().toggleHeading({ level: v as 1|2|3 }).run()
-            }}>
-            <option value="0">Paragraf</option>
-            <option value="1">Heading 1</option>
-            <option value="2">Heading 2</option>
-            <option value="3">Heading 3</option>
-          </select>
-          <div className="tb-sep" />
-
-          <TBtn icon="ti-bold"          tip="Bold"          active={editor.isActive('bold')}      onClick={() => editor.chain().focus().toggleBold().run()} />
-          <TBtn icon="ti-italic"        tip="Italic"        active={editor.isActive('italic')}    onClick={() => editor.chain().focus().toggleItalic().run()} />
-          <TBtn icon="ti-underline"     tip="Underline"     active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()} />
-          <TBtn icon="ti-strikethrough" tip="Strikethrough" active={editor.isActive('strike')}    onClick={() => editor.chain().focus().toggleStrike().run()} />
-          <div className="tb-sep" />
-
-          <TBtn icon="ti-align-left"      tip="Rata Kiri"  active={editor.isActive({textAlign:'left'})}    onClick={() => editor.chain().focus().setTextAlign('left').run()} />
-          <TBtn icon="ti-align-center"    tip="Tengah"     active={editor.isActive({textAlign:'center'})}  onClick={() => editor.chain().focus().setTextAlign('center').run()} />
-          <TBtn icon="ti-align-right"     tip="Rata Kanan" active={editor.isActive({textAlign:'right'})}   onClick={() => editor.chain().focus().setTextAlign('right').run()} />
-          <TBtn icon="ti-align-justified" tip="Justify"    active={editor.isActive({textAlign:'justify'})} onClick={() => editor.chain().focus().setTextAlign('justify').run()} />
-          <div className="tb-sep" />
-
-          <TBtn icon="ti-list"         tip="Bullet List"  active={editor.isActive('bulletList')}  onClick={() => editor.chain().focus().toggleBulletList().run()} />
-          <TBtn icon="ti-list-numbers" tip="Ordered List" active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()} />
-          <TBtn icon="ti-list-check"   tip="Task List"    active={editor.isActive('taskList')}    onClick={() => editor.chain().focus().toggleTaskList().run()} />
-          <div className="tb-sep" />
-
-          <TBtn icon="ti-quote"     tip="Blockquote" active={editor.isActive('blockquote')} onClick={() => editor.chain().focus().toggleBlockquote().run()} />
-          <TBtn icon="ti-code"      tip="Inline Code" active={editor.isActive('code')}      onClick={() => editor.chain().focus().toggleCode().run()} />
-          <TBtn icon="ti-code-dots" tip="Code Block"  active={editor.isActive('codeBlock')} onClick={() => editor.chain().focus().toggleCodeBlock().run()} />
-          <div className="tb-sep" />
-
-          <TBtn icon="ti-table-plus" tip="Sisipkan Tabel"
-            onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} />
-          {editor.isActive('table') && (
-            <>
-              <TBtn icon="ti-row-insert-bottom"   tip="Tambah Baris" onClick={() => editor.chain().focus().addRowAfter().run()} />
-              <TBtn icon="ti-column-insert-right" tip="Tambah Kolom" onClick={() => editor.chain().focus().addColumnAfter().run()} />
-              <TBtn icon="ti-row-remove"          tip="Hapus Baris"  onClick={() => editor.chain().focus().deleteRow().run()} />
-              <TBtn icon="ti-column-remove"       tip="Hapus Kolom"  onClick={() => editor.chain().focus().deleteColumn().run()} />
-              <TBtn icon="ti-table-off"           tip="Hapus Tabel"  onClick={() => editor.chain().focus().deleteTable().run()} />
-            </>
-          )}
-
-          <div className="tb-color-wrap" ref={imgRef}>
-            <button className="tb-btn" title="Sisipkan Gambar" onMouseDown={e => {
-              e.preventDefault(); setShowImagePicker(v => !v); setShowColorPicker(false); setShowHlPicker(false)
-            }}>
-              <i className="ti ti-photo" /><span className="tb-btn-label">Gambar</span>
-            </button>
-            {showImagePicker && (
-              <div className="image-url-popover">
-                <input
-                  className="image-url-input"
-                  type="text"
-                  placeholder="URL gambar…"
-                  value={imageUrl}
-                  onChange={e => setImageUrl(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); insertImage() } }}
-                  autoFocus
-                />
-                <button className="image-url-btn" onMouseDown={e => { e.preventDefault(); insertImage() }} title="Sisipkan">
-                  <i className="ti ti-check" />
-                </button>
-              </div>
-            )}
-          </div>
-          <div className="tb-sep" />
-
-          <div className="tb-color-wrap" ref={colorRef}>
-            <button className="tb-btn" title="Warna Teks" onMouseDown={e => { e.preventDefault(); setShowColorPicker(v=>!v); setShowHlPicker(false); setShowImagePicker(false) }}>
-              <i className="ti ti-letter-a"/><span className="tb-btn-label">Warna</span>
-            </button>
-            {showColorPicker && (
-              <div className="color-palette">
-                {TEXT_COLORS.map(c => (
-                  <button key={c} className="color-swatch" style={{ background:c, border:c==='#ffffff'?'1px solid #444':'none' }}
-                    onMouseDown={e => { e.preventDefault(); editor.chain().focus().setColor(c).run(); setShowColorPicker(false) }} />
-                ))}
-                <button className="color-swatch color-clear" onMouseDown={e => { e.preventDefault(); editor.chain().focus().unsetColor().run(); setShowColorPicker(false) }}>✕</button>
-              </div>
-            )}
-          </div>
-
-          <div className="tb-color-wrap" ref={hlRef}>
-            <button className="tb-btn" title="Highlight" onMouseDown={e => { e.preventDefault(); setShowHlPicker(v=>!v); setShowColorPicker(false); setShowImagePicker(false) }}>
-              <i className="ti ti-highlight"/><span className="tb-btn-label">Sorot</span>
-            </button>
-            {showHlPicker && (
-              <div className="color-palette">
-                {HIGHLIGHT_COLORS.map(c => (
-                  <button key={c} className="color-swatch" style={{ background:c }}
-                    onMouseDown={e => { e.preventDefault(); editor.chain().focus().setHighlight({ color:c }).run(); setShowHlPicker(false) }} />
-                ))}
-                <button className="color-swatch color-clear" onMouseDown={e => { e.preventDefault(); editor.chain().focus().unsetHighlight().run(); setShowHlPicker(false) }}>✕</button>
-              </div>
-            )}
-          </div>
-          <div className="tb-sep" />
-          <TBtn icon="ti-clear-formatting" tip="Hapus Format" onClick={() => editor.chain().focus().clearNodes().unsetAllMarks().run()} />
-        </div>
-      )}
+      {editor && <Toolbar editor={editor} />}
 
       {/* Body */}
       <div className="editor-body mode-wysiwyg">

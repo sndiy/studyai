@@ -13,8 +13,13 @@
   isolation: isolate;
 }
 
-/* Lapisan aurora — tiga blob radial yang hanyut sangat pelan.
-   Murni transform + opacity, jadi tetap ditangani compositor. */
+/* Lapisan aurora — tiga blob radial STATIS (dulu di-animasi hanyut 46s
+   infinite). [Perf sesi panjang] `filter: blur()` pada elemen yang bergerak
+   memaksa Chromium me-rasterisasi ulang layer besar ini terus-menerus
+   selama app terbuka — biaya GPU/baterai yang berjalan berjam-jam, dan
+   sempat ikut membebani frame pertama saat startup. Blur tetap ada (murni
+   estetika, dievaluasi SEKALI karena sekarang statis), yang dihapus cuma
+   animation + will-change (tidak ada lagi yang bergerak untuk di-hint). */
 .app-shell::before {
   content: '';
   position: absolute; inset: -25%;
@@ -26,16 +31,13 @@
     radial-gradient(32% 38% at 86% 10%, var(--aurora-2) 0%, transparent 70%),
     radial-gradient(48% 52% at 64% 98%, var(--aurora-3) 0%, transparent 72%);
   filter: blur(34px) saturate(118%);
-  animation: auroraDrift 46s var(--ease-emphasized) infinite alternate;
   transition: opacity var(--dur-4) var(--ease-out);
-  will-change: transform;
 }
 
-/* Calm focus — saat user sedang mengetik, aurora meredup dan berhenti.
-   Atribut ini di-set Editor lewat DOM langsung, tanpa re-render React. */
+/* Calm focus — saat user sedang mengetik, aurora meredup. Atribut ini
+   di-set Editor lewat DOM langsung, tanpa re-render React. */
 :root[data-writing='true'] .app-shell::before {
   opacity: .22;
-  animation-play-state: paused;
 }
 
 .app-body {
@@ -115,13 +117,16 @@
 .topbar-btn {
   display: flex; align-items: center; gap: var(--sp-2);
   padding: 6px var(--sp-3);
-  background: var(--surface-chrome);
+  /* [Perf sesi panjang] Dulu var(--surface-chrome) (translucent) + backdrop-
+     filter: blur(12px) — backdrop-filter dievaluasi ulang tiap repaint di
+     BELAKANG elemen ini, dan tombol ini selalu tampil selama editor terbuka.
+     --surface-chrome-solid sudah ada di tokens.css persis untuk kasus ini. */
+  background: var(--surface-chrome-solid);
   border: 1px solid var(--hairline);
   border-radius: var(--r-full);
   font-size: var(--fs-xs); font-weight: 500;
   color: var(--text-secondary);
   white-space: nowrap;
-  backdrop-filter: blur(12px);
   transition: background var(--dur-2) var(--ease-out),
               color var(--dur-2) var(--ease-out),
               border-color var(--dur-2) var(--ease-out),

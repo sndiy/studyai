@@ -137,6 +137,8 @@ declare global {
         onChunk: (cb: (payload: AIChunkPayload) => void) => () => void
       }
       openExternal: (url: string) => void
+      /** true saat proses main dijalankan dengan STUDYAI_PERF=1. */
+      perf: boolean
     }
   }
 }

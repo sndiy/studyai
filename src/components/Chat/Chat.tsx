@@ -1,18 +1,13 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { marked } from 'marked'
+import React, { useState, useEffect, useRef, useCallback, useDeferredValue } from 'react'
 import DOMPurify from 'dompurify'
 import { useStore, selectActiveModelMissing, type AIStatus } from '../../store/useStore'
 import { RETRYABLE_ERROR_KINDS, type ChatMessage } from '../../types'
+import { parseMarkdown } from '../../lib/mdSerialize'
 import './Chat.css'
-
-// Configure marked for synchronous use
-marked.setOptions({ breaks: true, gfm: true, async: false } as any)
-
-// (configured above at module level)
 
 // Sanitize markdown HTML to prevent XSS (critical in Electron context)
 function renderMarkdown(content: string): string {
-  const rawHtml = marked.parse(content || '', { async: false }) as string
+  const rawHtml = parseMarkdown(content || '')
   return DOMPurify.sanitize(rawHtml, {
     ALLOWED_TAGS: ['p','br','strong','em','del','ul','ol','li','h1','h2','h3',
                    'h4','h5','h6','blockquote','pre','code','a','table','thead',
@@ -438,11 +433,20 @@ function WelcomeScreen({ personaName, activeContext, embedded, onPickFile, useCo
   )
 }
 
-function MessageBubble({ msg, personaName, index, copiedIdx, onCopy }: {
+// [Perf sesi panjang] React.memo di sini yang sebenarnya menghentikan
+// transkrip terus-menerus di-re-sanitize: tanpanya, Chat re-render tiap kali
+// streamingText berubah (setiap frame yang di-commit rAF-coalescer di
+// useStore.ts) membuat SEMUA bubble pesan lama ikut re-render dan
+// menjalankan ulang marked.parse+DOMPurify.sanitize walau kontennya tidak
+// berubah. useMemo di dalam adalah jaring pengaman kedua terhadap
+// renderMarkdown itu sendiri kalau suatu saat props lain berubah tanpa
+// content-nya berubah.
+const MessageBubble = React.memo(function MessageBubble({ msg, personaName, index, copiedIdx, onCopy }: {
   msg: ChatMessage; personaName: string; index: number;
   copiedIdx: number | null; onCopy: (text: string, idx: number) => void;
 }) {
   const isUser = msg.role === 'user'
+  const html = React.useMemo(() => renderMarkdown(msg.content), [msg.content])
   return (
     <div className={`msg-row ${isUser ? 'user' : 'ai'}`}>
       {!isUser && (
@@ -454,7 +458,7 @@ function MessageBubble({ msg, personaName, index, copiedIdx, onCopy }: {
         </div>
         <div className={`bubble ${isUser ? 'user' : 'ai'}`}>
           <div className="md-preview"
-            dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }} />
+            dangerouslySetInnerHTML={{ __html: html }} />
           {!isUser && (
             <div className="bubble-actions">
               <button
@@ -476,11 +480,18 @@ function MessageBubble({ msg, personaName, index, copiedIdx, onCopy }: {
       )}
     </div>
   )
-}
+})
 
 function StreamingBubble({ text, status, detail, personaName }: {
   text: string; status: AIStatus; detail: string; personaName: string
 }) {
+  // [Perf sesi panjang] renderMarkdown() mem-parse ULANG SELURUH teks
+  // terakumulasi pada setiap update — O(n) per token, O(n²) totalnya untuk
+  // satu jawaban panjang. useDeferredValue membiarkan React menjatuhkan
+  // parse yang sudah usang saat token baru datang lebih cepat dari React
+  // sempat mem-parse & commit yang sebelumnya, alih-alih memaksa render tiap
+  // satu commit streamingText memicu satu parse penuh.
+  const deferredText = useDeferredValue(text)
   return (
     <div className="msg-row ai">
       <div className="msg-avatar ai-avatar streaming">🌸</div>
@@ -498,16 +509,16 @@ function StreamingBubble({ text, status, detail, personaName }: {
           )}
           {/* Selagi menunggu token pertama, tampilkan rangka berkilau —
               lebih informatif daripada bubble kosong yang diam. */}
-          {!text && status !== 'error' && (
+          {!deferredText && status !== 'error' && (
             <div className="stream-skeleton" aria-hidden="true">
               <span className="skeleton-line" />
               <span className="skeleton-line" />
               <span className="skeleton-line" />
             </div>
           )}
-          {text && (
+          {deferredText && (
             <div className="md-preview"
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }} />
+              dangerouslySetInnerHTML={{ __html: renderMarkdown(deferredText) }} />
           )}
           {status === 'streaming' && <span className="stream-caret" aria-hidden="true" />}
         </div>

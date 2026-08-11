@@ -83,4 +83,6 @@ contextBridge.exposeInMainWorld('api', {
   },
 
   openExternal: (url: string) => ipcRenderer.send('open:external', url),
+
+  perf: !!process.env['STUDYAI_PERF'],
 })

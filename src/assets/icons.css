@@ -1,0 +1,81 @@
+/*!
+ * Subset Tabler Icons — HANYA glyph yang benar-benar dipakai di src/.
+ * File ini DIGENERATE oleh scripts/gen-icons.mjs — JANGAN edit manual.
+ * Menambah ikon baru: pakai `ti ti-nama-baru` di kode, lalu jalankan
+ *   node scripts/gen-icons.mjs
+ * "npm run build" menjalankan --check dan GAGAL kalau file ini basi.
+ */
+@font-face{font-family:"tabler-icons";font-style:normal;font-weight:400;src:url("./fonts/tabler-icons-subset.woff2") format("woff2");font-display:block}
+.ti{font-family:"tabler-icons" !important;speak:none;font-style:normal;font-weight:normal;font-variant:normal;text-transform:none;line-height:1;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+.ti-adjustments:before{content:"\ea03"}
+.ti-alert-circle:before{content:"\ea05"}
+.ti-alert-triangle:before{content:"\ea06"}
+.ti-align-center:before{content:"\ea07"}
+.ti-align-justified:before{content:"\ea08"}
+.ti-align-left:before{content:"\ea09"}
+.ti-align-right:before{content:"\ea0a"}
+.ti-antenna-bars-5:before{content:"\eccb"}
+.ti-arrow-back-up:before{content:"\eb77"}
+.ti-arrow-down:before{content:"\ea16"}
+.ti-arrow-forward-up:before{content:"\eb78"}
+.ti-bold:before{content:"\eb7b"}
+.ti-check:before{content:"\ea5e"}
+.ti-chevron-right:before{content:"\ea61"}
+.ti-circle-dot:before{content:"\efb1"}
+.ti-clear-formatting:before{content:"\ebe5"}
+.ti-clock:before{content:"\ea70"}
+.ti-code:before{content:"\ea77"}
+.ti-code-dots:before{content:"\f61a"}
+.ti-column-insert-right:before{content:"\ee45"}
+.ti-column-remove:before{content:"\faf4"}
+.ti-copy:before{content:"\ea7a"}
+.ti-cpu:before{content:"\ef8e"}
+.ti-device-floppy:before{content:"\eb62"}
+.ti-edit:before{content:"\ea98"}
+.ti-eraser:before{content:"\eb8b"}
+.ti-file:before{content:"\eaa4"}
+.ti-file-check:before{content:"\ea9c"}
+.ti-file-plus:before{content:"\eaa0"}
+.ti-file-symlink:before{content:"\ed53"}
+.ti-file-text:before{content:"\eaa2"}
+.ti-folder-open:before{content:"\faf7"}
+.ti-highlight:before{content:"\ef3f"}
+.ti-info-circle:before{content:"\eac5"}
+.ti-italic:before{content:"\eb93"}
+.ti-layout-sidebar-left-collapse:before{content:"\f004"}
+.ti-layout-sidebar-right-collapse:before{content:"\f006"}
+.ti-letter-a:before{content:"\ec50"}
+.ti-letter-case:before{content:"\eea5"}
+.ti-list:before{content:"\eb6b"}
+.ti-list-check:before{content:"\eb6a"}
+.ti-list-numbers:before{content:"\ef11"}
+.ti-loader-2:before{content:"\f226"}
+.ti-lock-open:before{content:"\eae1"}
+.ti-minus:before{content:"\eaf2"}
+.ti-mood-empty:before{content:"\eeb5"}
+.ti-mood-smile:before{content:"\eaf7"}
+.ti-moon:before{content:"\eaf8"}
+.ti-palette:before{content:"\eb01"}
+.ti-pencil:before{content:"\eb04"}
+.ti-photo:before{content:"\eb0a"}
+.ti-player-stop:before{content:"\ed4a"}
+.ti-plug:before{content:"\ebd9"}
+.ti-quote:before{content:"\efbe"}
+.ti-refresh:before{content:"\eb13"}
+.ti-row-insert-bottom:before{content:"\eed0"}
+.ti-row-remove:before{content:"\fafe"}
+.ti-search:before{content:"\eb1c"}
+.ti-send:before{content:"\eb1e"}
+.ti-settings:before{content:"\eb20"}
+.ti-sparkles:before{content:"\f6d7"}
+.ti-square:before{content:"\eb2c"}
+.ti-squares-diagonal:before{content:"\eef5"}
+.ti-strikethrough:before{content:"\eb9e"}
+.ti-sun:before{content:"\eb30"}
+.ti-table-off:before{content:"\eefa"}
+.ti-table-plus:before{content:"\fa1f"}
+.ti-trash:before{content:"\eb41"}
+.ti-underline:before{content:"\eba2"}
+.ti-user:before{content:"\eb4d"}
+.ti-world:before{content:"\eb54"}
+.ti-x:before{content:"\eb55"}

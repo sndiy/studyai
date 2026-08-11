@@ -7,6 +7,11 @@ import { buildSafeMessages, resolveInputLimit } from '../lib/aiStream'
 import { providerOf, type Provider } from '../lib/providers'
 import { withViewTransition } from '../lib/viewTransition'
 import { DEFAULT_PERSONA_PROMPT, DEFAULT_PERSONA_LIMIT } from '../lib/personaDefaults'
+// Import melingkar dengan liveDoc.ts (yang balik mengimpor useStore) — aman
+// karena flushEditorToStore() cuma dipanggil di DALAM body action (saveDoc,
+// sendMessage), bukan di level modul, jadi kedua modul sudah selesai
+// dievaluasi jauh sebelum pemanggilan pertama benar-benar terjadi.
+import { flushEditorToStore } from './liveDoc'
 
 // [Bug #4] Sinkron dengan SECRET_KEYS di electron/main.ts. Main tidak pernah
 // mengirim nilai key ini ke renderer (lihat publicSettings/[S2]), tapi
@@ -14,6 +19,17 @@ import { DEFAULT_PERSONA_PROMPT, DEFAULT_PERSONA_LIMIT } from '../lib/personaDef
 // (mis. dari Settings.tsx saat user menyimpan API key) — daftar ini yang
 // mencegah nilai itu numpang lewat update optimistis ke store.
 const SECRET_SETTING_KEYS = new Set(['gemini_api_key', 'openai_api_key'])
+
+/** Harus sama dengan kunci yang dibaca inline script di index.html. */
+const SIDEBAR_CACHE_KEY = 'studyai-sidebar-collapsed'
+
+function readCachedSidebarCollapsed(): boolean {
+  try { return localStorage.getItem(SIDEBAR_CACHE_KEY) === '1' } catch { return false }
+}
+
+function cacheSidebarCollapsed(collapsed: boolean): void {
+  try { localStorage.setItem(SIDEBAR_CACHE_KEY, collapsed ? '1' : '0') } catch { /* mode privat */ }
+}
 
 // [Celah 2] Daftar model per provider, hidup di store supaya remount Settings
 // (ganti view lalu balik) tidak perlu fetch ulang — sumber kebenarannya sendiri
@@ -42,6 +58,17 @@ function ensureChunkListener() {
   window.api.ai.onChunk(p => chunkHandlers.get(p.requestId)?.(p))
 }
 
+// [Perf sesi panjang] Token SSE bisa datang puluhan kali/detik — men-`set()`
+// store pada SETIAP token memaksa render Chat (dan riwayat pesan di
+// dalamnya) berkali-kali per detik. Ditumpuk jadi maksimal satu commit per
+// frame lewat rAF. `currentStreamFlush` dipegang di level modul (bukan cuma
+// closure lokal sendMessage) supaya cancelStream() — action TERPISAH — bisa
+// memaksa commit nilai `accumulated` TERBARU sebelum membaca `streamingText`
+// dari store; tanpa ini, membatalkan tepat di antara dua frame bisa membaca
+// teks yang beberapa token lebih lama dari yang sebenarnya sudah tiba.
+let pendingStreamRaf: number | null = null
+let currentStreamFlush: (() => void) | null = null
+
 export interface StoreState {
   // ── Layout ────────────────────────────────────────────────────────────────
   /** Dipersist lewat setting `sidebar_collapsed` ('1' | '0'). */
@@ -59,7 +86,11 @@ export interface StoreState {
   // ── Document (file aktif di editor) ───────────────────────────────────────
   doc: Document | null
   setDoc: (doc: Document | null) => void
-  updateContent: (content: string) => void
+  /** Dipakai liveDoc.ts (flush dari editor) — ubah content SAJA, TIDAK
+   *  menyentuh isDirty. Dirty flag dikelola sendiri oleh onUpdate editor
+   *  lewat markDirty(), dipanggil langsung saat ketikan pertama sebuah sesi
+   *  edit — bukan menunggu flush yang tertunda. */
+  setDocContent: (content: string) => void
   updateTitle: (title: string) => void
   markDirty: () => void
   /** [Bug #1] Dipanggil Editor setelah round-trip check saat load; null = tidak ada yang hilang */
@@ -254,13 +285,17 @@ export const useStore = create<StoreState>((set, get) => {
   },
 
   // ── Layout ─────────────────────────────────────────────────────────────────
-  // Dihidrasi dari settings di loadSettings(); nilai awal false supaya render
-  // pertama tidak sempat memperlihatkan rail yang salah lebar.
-  sidebarCollapsed: false,
+  // Nilai awal dari localStorage (sinkron, tanpa nunggu IPC) — settings.json
+  // via loadSettings() tetap sumber kebenaran dan mengoreksi kalau beda begitu
+  // IPC selesai, tapi render pertama sudah benar untuk kasus umum (device yang
+  // sama, sesi sebelumnya). Kunci ini juga dibaca inline script di index.html
+  // untuk lebar rail di skeleton pra-React.
+  sidebarCollapsed: readCachedSidebarCollapsed(),
 
   toggleSidebar: () => {
     const next = !get().sidebarCollapsed
     set({ sidebarCollapsed: next })
+    cacheSidebarCollapsed(next)
     void get().updateSetting('sidebar_collapsed', next ? '1' : '0')
   },
 
@@ -272,8 +307,8 @@ export const useStore = create<StoreState>((set, get) => {
 
   setDoc: (doc) => set({ doc }),
 
-  updateContent: (content) => set(state => ({
-    doc: state.doc ? { ...state.doc, content, isDirty: true } : null,
+  setDocContent: (content) => set(state => ({
+    doc: state.doc ? { ...state.doc, content } : null,
   })),
 
   updateTitle: (title) => set(state => ({
@@ -299,6 +334,11 @@ export const useStore = create<StoreState>((set, get) => {
   },
 
   saveDoc: async (opts) => {
+    // Tarik markdown terkini dari editor SEBELUM snapshot `doc` diambil —
+    // onUpdate editor tidak lagi menulis ke store per-ketikan (lihat
+    // liveDoc.ts), jadi tanpa ini `doc.content` bisa basi kalau user baru
+    // saja mengetik dan idle timer belum sempat jalan.
+    flushEditorToStore()
     const { doc } = get()
     if (!doc) return false
 
@@ -454,13 +494,13 @@ export const useStore = create<StoreState>((set, get) => {
 
   loadSettings: async () => {
     const settings = await window.api.settings.getAll()
-    set({ settings, sidebarCollapsed: settings.sidebar_collapsed === '1' })
-    // [Celah 3] Hangatkan providerModels di awal supaya peringatan "model aktif
-    // hilang" bisa muncul di Chat tanpa user harus membuka Pengaturan dulu.
-    // Main process sudah menghangatkan cache-nya sendiri saat startup
-    // (warmVerifiedLimits), jadi ini biasanya langsung dari cache, bukan fetch baru.
-    if (settings.has_gemini_key) void get().loadProviderModels('gemini')
-    if (settings.has_openai_key) void get().loadProviderModels('openai')
+    const collapsed = settings.sidebar_collapsed === '1'
+    set({ settings, sidebarCollapsed: collapsed })
+    cacheSidebarCollapsed(collapsed)   // koreksi cache kalau beda device/sesi
+    // [Celah 3] providerModels & verifiedLimits TIDAK lagi di-warm di sini —
+    // App.tsx menjadwalkannya lewat whenIdle() setelah mount, supaya paint
+    // pertama tidak ikut menunggu IPC/jaringan yang tidak dibutuhkan sebelum
+    // user benar-benar membuka Pengaturan atau memakai chat.
   },
 
   // [B8] Kegagalan tulis settings dulu lolos sebagai unhandled rejection dan
@@ -544,7 +584,9 @@ export const useStore = create<StoreState>((set, get) => {
   },
 
   sendMessage: async (userText, useContext, _useWebSearch = false, fileContext = null) => {
-    const { settings, doc, messages } = get()
+    // `doc` di-refresh lagi lewat flushEditorToStore() di bawah, sebelum
+    // dipakai untuk konteks dokumen — bukan konstanta murni.
+    let { settings, doc, messages } = get()
     if (!settings || !userText.trim()) return false
 
     // [B5] Timer error dari request sebelumnya WAJIB dimatikan di sini. Kalau tidak,
@@ -644,7 +686,12 @@ export const useStore = create<StoreState>((set, get) => {
         'terang bahwa bagian itu tidak termasuk dalam konteks yang diberikan — ' +
         'jangan mengarang atau menebak isi bagian yang tidak kamu lihat.'
 
-      // Konteks dari dokumen aktif di editor
+      // Konteks dari dokumen aktif di editor. Tarik markdown terkini dari
+      // editor dulu (lihat liveDoc.ts) — `doc` di atas adalah snapshot dari
+      // awal fungsi ini, dan onUpdate editor tidak lagi menulis ke store
+      // per-ketikan, jadi kontennya bisa basi kalau user baru saja mengetik.
+      flushEditorToStore()
+      doc = get().doc
       if (useContext && doc?.content) {
         set({ aiStatus: 'chunking', aiStatusDetail: 'Memecah dokumen...' })
         await yieldToRender()
@@ -705,6 +752,16 @@ export const useStore = create<StoreState>((set, get) => {
       ensureChunkListener()
       let accumulated = ''
 
+      // Commit `accumulated` ke store SEKARANG (bukan lewat rAF) dan batalkan
+      // rAF yang mungkin masih tertunda — dipakai finish() (supaya rAF lama
+      // tidak menimpa `set()` akhir yang sudah punya nilai sendiri) dan
+      // cancelStream() (supaya teks yang dibaca benar-benar yang terbaru).
+      const flushStreamingTextNow = () => {
+        if (pendingStreamRaf != null) { cancelAnimationFrame(pendingStreamRaf); pendingStreamRaf = null }
+        set({ streamingText: accumulated, aiStatus: 'streaming' })
+      }
+      currentStreamFlush = flushStreamingTextNow
+
       await new Promise<void>((resolve) => {
         let settled = false
         // [L5] Handle timer jaring-pengaman di bawah disimpan di sini supaya
@@ -717,6 +774,12 @@ export const useStore = create<StoreState>((set, get) => {
         const finish = () => {
           if (settled) return
           settled = true
+          // Batalkan (BUKAN commit) — set() di bawah untuk done/error/catch
+          // sudah punya nilai akhirnya sendiri untuk streamingText; rAF yang
+          // masih tertunda kalau dibiarkan jalan akan menimpanya balik ke
+          // `accumulated` sesaat setelahnya.
+          if (pendingStreamRaf != null) { cancelAnimationFrame(pendingStreamRaf); pendingStreamRaf = null }
+          currentStreamFlush = null
           if (safetyTimer) clearTimeout(safetyTimer)
           chunkHandlers.delete(requestId)
           resolve()
@@ -747,7 +810,15 @@ export const useStore = create<StoreState>((set, get) => {
 
           if (!done) {
             accumulated += text
-            set({ streamingText: accumulated, aiStatus: 'streaming' })
+            // Maksimal satu commit store per frame — token yang datang lebih
+            // cepat dari itu numpang di `accumulated` dan ikut ke commit
+            // berikutnya, bukan masing-masing memicu set() + render sendiri.
+            if (pendingStreamRaf == null) {
+              pendingStreamRaf = requestAnimationFrame(() => {
+                pendingStreamRaf = null
+                set({ streamingText: accumulated, aiStatus: 'streaming' })
+              })
+            }
             return
           }
 
@@ -874,6 +945,11 @@ export const useStore = create<StoreState>((set, get) => {
   },
 
   cancelStream: () => {
+    // Paksa commit `accumulated` TERBARU ke store sebelum dibaca di bawah —
+    // tanpa ini, membatalkan tepat di antara dua frame rAF bisa membaca
+    // streamingText yang beberapa token lebih lama dari yang sebenarnya
+    // sudah tiba (lihat komentar currentStreamFlush di atas).
+    currentStreamFlush?.()
     const { activeRequestId, _errorTimeoutId, streamingText, messages } = get()
     if (_errorTimeoutId) clearTimeout(_errorTimeoutId)
     if (activeRequestId) window.api.ai.cancel(activeRequestId)

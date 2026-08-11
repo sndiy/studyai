@@ -2,7 +2,7 @@ import React from 'react'
 import { useStore } from '../../store/useStore'
 import type { View } from '../../types'
 import './Sidebar.css'
-import logoUrl from '../../assets/studyai-logo.png'
+import logoUrl from '../../assets/studyai-logo.svg'
 
 function timeAgo(dateStr: string): string {
   const d = new Date(dateStr).getTime()
@@ -22,16 +22,37 @@ const NAV_ITEMS: { id: View; icon: string; label: string }[] = [
 ]
 
 export default function Sidebar() {
-  const {
-    currentView, setView,
-    doc, openFile, newDoc,
-    recentFiles, openRecent, removeRecent,
-    settings, sidebarCollapsed, toggleSidebar,
-  } = useStore()
+  // [Bug #16-lanjutan] Sebelumnya `useStore()` tanpa selector — Sidebar
+  // berlangganan ke SELURUH store, jadi ikut re-render pada SETIAP ketukan
+  // editor (doc berubah identitas tiap flush) dan setiap token AI yang
+  // di-stream. Selector per-field di bawah, terutama yang membaca `doc`,
+  // SENGAJA mengembalikan primitif (string/boolean), bukan objek `doc` utuh —
+  // Zustand membandingkan hasil selector dengan referensi (Object.is), jadi
+  // primitif yang nilainya tidak berubah membuat Sidebar TIDAK re-render sama
+  // sekali walau identitas `doc` di store berubah karena isi konten berbeda.
+  const currentView = useStore(s => s.currentView)
+  const setView     = useStore(s => s.setView)
 
-  const activeModel = settings?.active_model ?? 'gemini-2.0-flash'
+  const hasDoc      = useStore(s => !!s.doc)
+  const docTitle    = useStore(s => s.doc?.title ?? '')
+  const docFilePath = useStore(s => s.doc?.filePath ?? null)
+  const docIsDirty  = useStore(s => !!s.doc?.isDirty)
+
+  const openFile = useStore(s => s.openFile)
+  const newDoc   = useStore(s => s.newDoc)
+
+  const recentFiles = useStore(s => s.recentFiles)
+  const openRecent   = useStore(s => s.openRecent)
+  const removeRecent = useStore(s => s.removeRecent)
+
+  const activeModel = useStore(s => s.settings?.active_model) ?? 'gemini-2.0-flash'
   // [S2] Renderer tidak lagi menerima API key — cukup tahu sudah terisi atau belum
-  const hasKey = !!(settings?.has_gemini_key || settings?.has_openai_key)
+  const hasGeminiKey = useStore(s => !!s.settings?.has_gemini_key)
+  const hasOpenaiKey = useStore(s => !!s.settings?.has_openai_key)
+  const hasKey = hasGeminiKey || hasOpenaiKey
+
+  const sidebarCollapsed = useStore(s => s.sidebarCollapsed)
+  const toggleSidebar    = useStore(s => s.toggleSidebar)
 
   return (
     <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
@@ -89,19 +110,19 @@ export default function Sidebar() {
       {/* Satu region scroll untuk kedua daftar file. Sebelumnya dua section
           sama-sama mengklaim flex:1 dan saling berebut tinggi. */}
       <div className="sidebar-scroll">
-        {doc && (
+        {hasDoc && (
           <section className="file-section">
             <div className="nav-label">File Aktif</div>
             <div className="note-card active">
               <div className="note-card-title">
                 <i className="ti ti-file-text" />
-                <span className="note-card-title-text">{doc.title || 'Tanpa Judul'}</span>
-                {doc.isDirty && <span className="dirty-dot" title="Belum disimpan" />}
+                <span className="note-card-title-text">{docTitle || 'Tanpa Judul'}</span>
+                {docIsDirty && <span className="dirty-dot" title="Belum disimpan" />}
               </div>
-              {doc.filePath ? (
+              {docFilePath ? (
                 <div className="note-card-meta">
                   <i className="ti ti-file-symlink" />
-                  <span className="note-card-path">{doc.filePath.split(/[\\/]/).pop()}</span>
+                  <span className="note-card-path">{docFilePath.split(/[\\/]/).pop()}</span>
                 </div>
               ) : (
                 <div className="note-card-meta warn">
@@ -119,7 +140,7 @@ export default function Sidebar() {
             {recentFiles.map((f, i) => (
               <div
                 key={f.path}
-                className={`note-card ${doc?.filePath === f.path ? 'active' : ''}`}
+                className={`note-card ${docFilePath === f.path ? 'active' : ''}`}
                 style={{ '--i': i } as React.CSSProperties}
                 onClick={() => openRecent(f.path, f.title)}
               >

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useStore } from '../../store/useStore'
-import logoUrl from '../../assets/studyai-logo.png'
+import logoUrl from '../../assets/studyai-logo.svg'
 import './Titlebar.css'
 
 /**
